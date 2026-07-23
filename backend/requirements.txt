@@ -1,0 +1,27 @@
+# Web framework
+fastapi
+uvicorn[standard]
+python-dotenv
+pydantic-settings
+python-multipart
+
+# Database (pinned for compatibility)
+beanie>=1.26,<2
+motor>=3.5,<3.7
+pymongo>=4.5,<4.9
+
+# Auth
+python-jose[cryptography]
+passlib[bcrypt]
+
+# Validation
+email-validator
+
+# OpenAI
+openai
+
+# Pinecone
+pinecone
+
+# HTTP
+httpx

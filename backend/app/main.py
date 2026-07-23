@@ -1,34 +1,43 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
-from pydantic import BaseModel
-from typing import List
+from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI()
+from app.db.mongodb import init_db, close_db
+from app.api.v1.router import v1_router
 
-class Tea(BaseModel):
-    id: int
-    name: str
-    origin: str
 
-teas : List[Tea] = []
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup / shutdown lifecycle."""
+    await init_db()
+    print("[OK] MongoDB connected & Beanie initialised")
+    yield
+    await close_db()
+    print("[STOP] MongoDB connection closed")
 
-@app.get("/")
-def read_root():
-    return {"message":"welcome to Tea house!"}
 
-@app.get("/teas")
-def get_teas():
-    return teas
+app = FastAPI(
+    title="Code Search API",
+    description="Search codebases using natural language",
+    version="0.1.0",
+    lifespan=lifespan,
+)
 
-@app.post("/teas")
-def add_teas(tea: Tea):
-    teas.append(tea)
-    return tea
+# CORS — allow everything during development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.put("/teas/{tea_id}")
-def update_tea(tea_id: int, updated_tea: Tea):
-    for idx, tea in enumerate(teas):
-        if tea.id == tea_id:
-            teas[idx] = updated_tea
-            return updated_tea
-    return {"error":f"tea with id: {tea_id} not found"}
-    
+# Mount versioned API router
+app.include_router(v1_router)
+
+
+@app.get("/health", tags=["Health"])
+async def health_check():
+    """Basic liveness probe."""
+    return {"status": "ok"}
