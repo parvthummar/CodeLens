@@ -1,0 +1,35 @@
+# Python virtual environment
+backend/cr_venv/
+
+# Environment variables
+backend/.env
+backend/.env.*
+
+# Python cache
+backend/**/__pycache__/
+backend/**/*.py[cod]
+
+# Test & lint caches
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+
+# Build artifacts
+backend/build/
+backend/dist/
+backend/*.egg-info/
+
+# SQLite databases
+backend/*.db
+backend/*.sqlite3
+
+# Logs
+backend/*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
