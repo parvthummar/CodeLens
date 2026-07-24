@@ -1,5 +1,6 @@
 import tempfile
 import asyncio
+import traceback
 from datetime import datetime, timezone
 from bson import ObjectId
 
@@ -62,11 +63,14 @@ async def run_indexing_pipeline(project_id: str) -> None:
         await project.save()
         
     except Exception as e:
+        print(f"[INDEXING ERROR] project={project_id}: {repr(e)}")
+        traceback.print_exc()
         if 'project' in locals() and project:
             project.status = ProjectStatus.FAILED
-            project.error_message = str(e)
+            project.error_message = repr(e)
             project.updated_at = datetime.now(timezone.utc)
             await project.save()
     finally:
         if dest_dir:
             github_service.cleanup_repo(dest_dir)
+

@@ -22,6 +22,7 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
         response = await client.embeddings.create(
             input=batch,
             model=settings.openai_embedding_model,
+            dimensions=settings.openai_embedding_dimensions,
         )
         batch_embeddings = [data.embedding for data in response.data]
         all_embeddings.extend(batch_embeddings)
@@ -34,5 +35,6 @@ async def embed_query(text: str) -> list[float]:
     response = await client.embeddings.create(
         input=[text],
         model=settings.openai_embedding_model,
+        dimensions=settings.openai_embedding_dimensions,
     )
     return response.data[0].embedding

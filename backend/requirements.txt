@@ -13,6 +13,7 @@ pymongo>=4.5,<4.9
 # Auth
 python-jose[cryptography]
 passlib[bcrypt]
+bcrypt>=4.0,<4.1
 
 # Validation
 email-validator
