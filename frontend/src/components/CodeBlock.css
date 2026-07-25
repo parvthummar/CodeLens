@@ -1,0 +1,20 @@
+.code-block-container {
+  background-color: #0d0d1a;
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  font-family: var(--font-code);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  padding: 16px;
+  border: 1px solid var(--glass-border);
+}
+
+.code-block-container pre {
+  margin: 0;
+  padding: 0;
+  background: transparent !important;
+}
+
+.code-block-container code {
+  font-family: inherit;
+}

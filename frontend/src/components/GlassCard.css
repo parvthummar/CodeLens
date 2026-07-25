@@ -1,0 +1,4 @@
+.glass-card-component {
+  padding: 24px;
+  animation: slideUp 0.3s ease forwards;
+}

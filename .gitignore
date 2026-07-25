@@ -33,3 +33,26 @@ backend/*.log
 # OS files
 .DS_Store
 Thumbs.db
+
+# Frontend logs
+frontend/logs
+frontend/*.log
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/lerna-debug.log*
+
+# Frontend build/deps
+frontend/node_modules
+frontend/dist
+frontend/dist-ssr
+frontend/*.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
