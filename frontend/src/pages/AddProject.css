@@ -1,0 +1,48 @@
+.add-project-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 96px 20px 20px;
+  background: radial-gradient(ellipse at center, var(--bg-tertiary) 0%, var(--bg-primary) 70%);
+}
+
+.add-project-card {
+  width: 100%;
+  max-width: 480px;
+  padding: 40px;
+}
+
+.add-project-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 8px;
+}
+
+.add-project-subtitle {
+  color: var(--text-secondary);
+  margin-bottom: 32px;
+}
+
+.add-project-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.add-project-back {
+  display: inline-block;
+  margin-top: 24px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.2s;
+}
+
+.add-project-back:hover {
+  color: var(--text-primary);
+}
