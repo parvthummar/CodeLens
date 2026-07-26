@@ -3,14 +3,24 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 96px 20px 20px;
+  padding: 96px 20px 40px;
   background: radial-gradient(ellipse at center, var(--bg-tertiary) 0%, var(--bg-primary) 70%);
 }
 
 .add-project-card {
   width: 100%;
-  max-width: 480px;
+  max-width: 500px;
   padding: 40px;
+}
+
+.add-project-icon {
+  font-size: 2rem;
+  font-family: var(--font-code);
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 16px;
 }
 
 .add-project-title {
@@ -25,13 +35,36 @@
 
 .add-project-subtitle {
   color: var(--text-secondary);
-  margin-bottom: 32px;
+  margin-bottom: 28px;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.add-project-error {
+  margin-bottom: 16px;
 }
 
 .add-project-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-label {
+  font-size: 0.813rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.field-optional {
+  color: var(--text-muted);
+  font-weight: 400;
 }
 
 .add-project-back {

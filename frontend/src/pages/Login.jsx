@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
+import { Link, useNavigate, Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import './Login.css';
 
 export default function Login() {
@@ -8,15 +8,17 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const data = await api.login({ email, password });
-      localStorage.setItem('token', data.access_token);
+      await login(email, password);
       navigate('/dashboard');
     } catch (err) {
       setError(err.message || 'Login failed');
@@ -28,8 +30,9 @@ export default function Login() {
   return (
     <div className="login-page">
       <div className="glass-card login-card">
+        <div className="login-logo">{'</>'}</div>
         <h1 className="login-title">Welcome Back</h1>
-        <p className="login-subtitle">Sign in to your account</p>
+        <p className="login-subtitle">Sign in to search your codebases with AI</p>
 
         {error && <div className="login-error">{error}</div>}
 
@@ -56,7 +59,7 @@ export default function Login() {
         </form>
 
         <div className="login-footer">
-          Don't have an account? <Link to="/signup">Sign up</Link>
+          Don&apos;t have an account? <Link to="/signup">Sign up</Link>
         </div>
       </div>
     </div>

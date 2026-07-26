@@ -1,7 +1,16 @@
 .project-detail {
-  padding: 96px 32px 32px;
+  padding: 96px 32px 48px;
   max-width: 800px;
   margin: 0 auto;
+  animation: fadeIn 0.3s ease;
+}
+
+.project-detail-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 0;
 }
 
 .detail-back {
@@ -9,7 +18,7 @@
   color: var(--text-secondary);
   text-decoration: none;
   font-size: 0.875rem;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
   transition: color 0.2s;
 }
 
@@ -21,21 +30,21 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 24px;
+  gap: 16px;
+  margin-bottom: 32px;
 }
 
 .detail-title {
   font-size: 1.75rem;
   font-weight: 700;
   color: var(--text-primary);
+  margin-bottom: 8px;
 }
 
 .detail-url {
   color: var(--accent-secondary);
   text-decoration: none;
   font-size: 0.875rem;
-  margin-bottom: 24px;
-  display: inline-block;
   transition: color 0.2s;
 }
 
@@ -43,76 +52,92 @@
   color: var(--accent-primary);
 }
 
-.detail-status {
-  margin-bottom: 32px;
+.detail-not-found {
+  color: var(--text-muted);
+  margin-top: 40px;
 }
 
 /* Pipeline Progress Stepper */
 .pipeline-stepper {
   display: flex;
   align-items: center;
-  margin: 32px 0;
-  padding: 24px;
+  margin: 0 0 32px;
+  padding: 28px 24px;
+  overflow-x: auto;
+}
+
+.pipeline-item {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.pipeline-item:last-child {
+  flex: none;
 }
 
 .pipeline-step {
   display: flex;
   flex-direction: column;
   align-items: center;
-  position: relative;
-  z-index: 1;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .step-circle {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
+  font-size: 0.813rem;
   font-weight: 700;
   transition: all 0.3s;
 }
 
-.step-circle.completed {
+.step-completed {
   background: var(--success);
   color: white;
 }
 
-.step-circle.active {
+.step-active {
   background: var(--accent-primary);
   color: white;
   animation: pulse 1.5s ease-in-out infinite;
   box-shadow: 0 0 20px rgba(124, 58, 237, 0.4);
 }
 
-.step-circle.pending {
+.step-pending {
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-muted);
   border: 2px solid var(--glass-border);
 }
 
-.step-circle.failed {
+.step-failed {
   background: var(--error);
   color: white;
 }
 
 .step-label {
-  margin-top: 8px;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
+  font-weight: 500;
 }
 
-.step-label.active {
+.step-label-active {
   color: var(--accent-primary);
-  font-weight: 600;
+  font-weight: 700;
 }
 
-.step-label.completed {
+.step-label-completed {
   color: var(--success);
+}
+
+.step-label-failed {
+  color: var(--error);
 }
 
 .step-line {
@@ -120,46 +145,93 @@
   height: 2px;
   background: var(--glass-border);
   margin: 0 8px;
-  margin-bottom: 24px;
-  transition: background 0.3s;
+  margin-bottom: 26px;
+  transition: background 0.4s;
 }
 
-.step-line.completed {
+.step-line-done {
   background: var(--success);
 }
 
+/* Error box */
 .detail-error {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
   border-radius: var(--radius-md);
   padding: 16px 20px;
   color: var(--error);
-  margin: 24px 0;
+  margin-bottom: 24px;
 }
 
 .detail-error-title {
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
+.detail-error-msg {
+  font-size: 0.875rem;
+  font-family: var(--font-code);
+  opacity: 0.85;
+  word-break: break-all;
+}
+
+/* Progress note */
+.detail-progress-note {
+  font-size: 0.813rem;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-progress-note::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  animation: pulse 1.5s infinite;
+  flex-shrink: 0;
+}
+
+/* Actions */
 .detail-actions {
-  margin-top: 32px;
   display: flex;
   gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 32px;
 }
 
 .detail-search-btn {
-  padding: 14px 32px;
-  font-size: 1rem;
-  text-decoration: none;
+  padding: 12px 28px;
+  font-size: 0.938rem;
 }
 
+.btn-delete {
+  color: var(--error) !important;
+  border-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+.btn-delete:hover {
+  background: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.4) !important;
+}
+
+.btn-sm {
+  padding: 8px 16px;
+  font-size: 0.813rem;
+  border-radius: var(--radius-sm);
+}
+
+/* Timestamps */
 .detail-timestamps {
-  margin-top: 32px;
-  padding-top: 16px;
+  padding-top: 20px;
   border-top: 1px solid var(--glass-border);
   display: flex;
   gap: 24px;
+  flex-wrap: wrap;
   color: var(--text-muted);
   font-size: 0.813rem;
 }

@@ -13,8 +13,11 @@ async function request(endpoint, options = {}) {
     headers,
   });
 
-  if (response.status === 401) {
+  // Only redirect on 401 for authenticated routes, not for the auth endpoints themselves
+  // (wrong password on /auth/login also returns 401, but should show an error, not redirect)
+  if (response.status === 401 && !endpoint.startsWith('/api/v1/auth/')) {
     localStorage.removeItem('token');
+    localStorage.removeItem('user_email');
     window.location.href = '/login';
     return;
   }

@@ -41,13 +41,20 @@ async def run_indexing_pipeline(project_id: str) -> None:
         descriptions = await llm_service.generate_descriptions_batch(entities)
         embeddings = await embedding_service.embed_texts(descriptions)
         
+        # Pinecone metadata limit is 40 960 bytes per vector.
+        # Truncate source code to keep the total payload well under that.
+        _MAX_CODE_BYTES = 20_000
+
         vectors = []
         for i, entity in enumerate(entities):
             vector_id = f"{project_id}_{i}"
+            code = entity.source_code
+            if len(code.encode("utf-8")) > _MAX_CODE_BYTES:
+                code = code.encode("utf-8")[:_MAX_CODE_BYTES].decode("utf-8", errors="ignore") + "\n# … (truncated)"
             metadata = {
                 "name": entity.name,
                 "entity_type": entity.entity_type,
-                "code": entity.source_code,
+                "code": code,
                 "signature": entity.signature,
                 "description": descriptions[i],
                 "file_path": entity.file_path,

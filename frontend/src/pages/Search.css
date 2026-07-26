@@ -1,7 +1,8 @@
 .search-page {
-  padding: 96px 32px 32px;
+  padding: 96px 32px 48px;
   max-width: 900px;
   margin: 0 auto;
+  animation: fadeIn 0.3s ease;
 }
 
 .search-back {
@@ -9,7 +10,7 @@
   color: var(--text-secondary);
   text-decoration: none;
   font-size: 0.875rem;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   transition: color 0.2s;
 }
 
@@ -17,17 +18,30 @@
   color: var(--text-primary);
 }
 
+.search-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
 .search-title {
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 24px;
+  margin: 0;
+}
+
+.search-project-name {
+  color: var(--text-muted);
+  font-size: 0.875rem;
 }
 
 .search-bar {
   display: flex;
   gap: 12px;
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
 .search-input {
@@ -39,6 +53,13 @@
 .search-btn {
   padding: 14px 28px;
   white-space: nowrap;
+  font-size: 0.938rem;
+}
+
+.search-count {
+  color: var(--text-muted);
+  font-size: 0.813rem;
+  margin-bottom: 16px;
 }
 
 /* Results */
@@ -56,25 +77,26 @@
 .result-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 8px;
   flex-wrap: wrap;
 }
 
 .result-name {
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-code);
 }
 
 .result-type {
-  padding: 3px 10px;
+  padding: 2px 10px;
   border-radius: 999px;
   font-size: 0.688rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  flex-shrink: 0;
 }
 
 .type-function {
@@ -92,11 +114,35 @@
   color: #5eead4;
 }
 
-.result-score {
+.result-score-wrap {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.result-score-label {
   color: var(--text-muted);
-  font-size: 0.813rem;
-  font-weight: 500;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: var(--font-code);
+}
+
+.score-bar {
+  width: 60px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+  display: inline-block;
+}
+
+.score-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent-gradient);
+  transition: width 0.4s ease;
 }
 
 .result-file {
@@ -104,13 +150,21 @@
   font-size: 0.75rem;
   color: var(--text-muted);
   margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.result-lines {
+  color: var(--text-muted);
+  opacity: 0.7;
 }
 
 .result-description {
   color: var(--text-secondary);
   font-style: italic;
   font-size: 0.875rem;
-  line-height: 1.5;
+  line-height: 1.6;
   margin: 12px 0;
   padding: 12px 16px;
   background: rgba(255, 255, 255, 0.02);
@@ -122,6 +176,7 @@
   padding: 6px 14px;
   font-size: 0.75rem;
   margin-top: 8px;
+  border-radius: var(--radius-sm);
 }
 
 .result-code {
@@ -129,30 +184,89 @@
   animation: fadeIn 0.2s ease;
 }
 
+/* Empty state */
 .search-empty {
   text-align: center;
-  padding: 60px 20px;
+  padding: 80px 20px;
   color: var(--text-secondary);
+  animation: fadeIn 0.4s ease;
+}
+
+.search-empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 16px;
+  opacity: 0.5;
 }
 
 .search-empty h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
   margin-bottom: 8px;
+  color: var(--text-secondary);
 }
 
-.score-bar {
-  width: 60px;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 2px;
-  overflow: hidden;
-  display: inline-block;
-  margin-left: 8px;
-  vertical-align: middle;
+.search-empty p {
+  color: var(--text-muted);
+  font-size: 0.875rem;
 }
 
-.score-fill {
-  height: 100%;
-  border-radius: 2px;
-  background: var(--accent-gradient);
-  transition: width 0.3s;
+/* Skeleton loader */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.result-skeleton {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skel {
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 400px 100%;
+  animation: shimmer 1.4s ease infinite;
+  height: 14px;
+}
+
+.skel-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.skel-name {
+  width: 160px;
+  height: 16px;
+}
+
+.skel-badge {
+  width: 64px;
+  height: 20px;
+  border-radius: 999px;
+}
+
+.skel-score {
+  width: 80px;
+  margin-left: auto;
+}
+
+.skel-file {
+  width: 200px;
+  height: 12px;
+}
+
+.skel-line {
+  width: 100%;
+}
+
+.skel-line-short {
+  width: 70%;
 }

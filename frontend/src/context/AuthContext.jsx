@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useContext } from 'react';
 import { api } from '../api/client';
 import { useNavigate } from 'react-router-dom';
 
@@ -6,21 +6,24 @@ export const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
+const getStoredUser = () => {
+  const email = localStorage.getItem('user_email');
+  return email ? { email } : null;
+};
+
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(getStoredUser);
   const [token, setToken] = useState(localStorage.getItem('token'));
-  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'));
   const navigate = useNavigate();
 
-  useEffect(() => {
-    setIsAuthenticated(!!token);
-  }, [token]);
+  const isAuthenticated = !!token;
 
   const login = async (email, password) => {
     const data = await api.login({ email, password });
     localStorage.setItem('token', data.access_token);
+    localStorage.setItem('user_email', email);
     setToken(data.access_token);
-    setUser({ email }); // simplistic user decoding
+    setUser({ email });
   };
 
   const signup = async (email, password, full_name) => {
@@ -29,6 +32,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user_email');
     setToken(null);
     setUser(null);
     navigate('/login');

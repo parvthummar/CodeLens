@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
+import { Link, useNavigate, Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import './Login.css';
 
 export default function Signup() {
@@ -9,16 +9,18 @@ export default function Signup() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { signup, login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await api.signup({ email, password, full_name: fullName });
-      const data = await api.login({ email, password });
-      localStorage.setItem('token', data.access_token);
+      await signup(email, password, fullName);
+      await login(email, password);
       navigate('/dashboard');
     } catch (err) {
       setError(err.message || 'Signup failed');
@@ -30,6 +32,7 @@ export default function Signup() {
   return (
     <div className="login-page">
       <div className="glass-card login-card">
+        <div className="login-logo">{'</>'}</div>
         <h1 className="login-title">Create Account</h1>
         <p className="login-subtitle">Start searching code with AI</p>
 

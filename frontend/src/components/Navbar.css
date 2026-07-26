@@ -4,8 +4,9 @@
   left: 0;
   right: 0;
   height: 64px;
-  background: rgba(10, 10, 26, 0.8);
+  background: rgba(10, 10, 26, 0.85);
   backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--glass-border);
   z-index: 100;
   display: flex;
@@ -23,13 +24,27 @@
 }
 
 .navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-family: var(--font-ui);
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 700;
   background: var(--accent-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.navbar-brand:hover {
+  opacity: 0.85;
+}
+
+.navbar-brand-icon {
+  font-family: var(--font-code);
+  font-size: 1rem;
 }
 
 .navbar-actions {
@@ -40,5 +55,14 @@
 
 .navbar-email {
   color: var(--text-secondary);
+  font-size: 0.875rem;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navbar-logout {
+  padding: 8px 16px;
   font-size: 0.875rem;
 }

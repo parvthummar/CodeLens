@@ -13,6 +13,16 @@
   padding: 40px;
 }
 
+.login-logo {
+  font-size: 2rem;
+  font-family: var(--font-code);
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 16px;
+}
+
 .login-title {
   font-size: 1.75rem;
   font-weight: 700;
@@ -27,6 +37,7 @@
   color: var(--text-secondary);
   margin-bottom: 32px;
   font-size: 0.938rem;
+  line-height: 1.5;
 }
 
 .login-form {
@@ -42,6 +53,7 @@
   padding: 10px 14px;
   border-radius: var(--radius-sm);
   border: 1px solid rgba(239, 68, 68, 0.2);
+  margin-bottom: 8px;
 }
 
 .login-submit {
@@ -54,6 +66,7 @@
 .login-submit:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  transform: none;
 }
 
 .login-footer {

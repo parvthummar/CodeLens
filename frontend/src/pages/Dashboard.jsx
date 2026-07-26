@@ -12,7 +12,6 @@ export default function Dashboard() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     api.getProjects()
@@ -36,7 +35,7 @@ export default function Dashboard() {
     return (
       <>
         <Navbar />
-        <div className="dashboard">
+        <div className="dashboard dashboard-loading">
           <LoadingSpinner message="Loading projects..." />
         </div>
       </>
@@ -48,26 +47,48 @@ export default function Dashboard() {
       <Navbar />
       <div className="dashboard">
         <div className="dashboard-header">
-          <h1 className="dashboard-title">Your Projects</h1>
-          <Link to="/projects/new" className="btn-primary btn-sm" style={{ textDecoration: 'none' }}>
-            <span className="add-btn-icon">+</span> Add Project
+          <div>
+            <h1 className="dashboard-title">Your Projects</h1>
+            <p className="dashboard-subtitle">
+              {projects.length === 0
+                ? 'Connect repositories to start searching code with AI'
+                : `${projects.length} project${projects.length !== 1 ? 's' : ''}`}
+            </p>
+          </div>
+          <Link to="/projects/new" className="btn-primary btn-sm add-btn" style={{ textDecoration: 'none' }}>
+            + Add Project
           </Link>
         </div>
 
         {projects.length === 0 ? (
           <div className="empty-state">
-            <h2>No projects yet</h2>
-            <p>Connect a GitHub repository to start searching code with AI</p>
+            <div className="empty-icon">{'</>'}</div>
+            <h2 className="empty-title">No projects yet</h2>
+            <p className="empty-desc">
+              Connect a GitHub repository to index its code and search with natural language
+            </p>
             <Link to="/projects/new" className="btn-primary" style={{ textDecoration: 'none' }}>
               Add Your First Project
             </Link>
           </div>
         ) : (
           <div className="dashboard-grid">
-            {projects.map((project) => (
-              <GlassCard key={project.id} className="project-card">
+            {projects.map((project, i) => (
+              <GlassCard
+                key={project.id}
+                className="project-card"
+                style={{ animationDelay: `${i * 0.05}s` }}
+              >
                 <div className="project-name">{project.name}</div>
-                <div className="project-url">{project.github_repo_url}</div>
+                <a
+                  href={project.github_repo_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="project-url"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {project.github_repo_url}
+                </a>
                 <div className="project-meta">
                   <StatusBadge status={project.status} />
                   <span className="project-date">
