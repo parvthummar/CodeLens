@@ -1,0 +1,7 @@
+# Development / test dependencies.
+# Install with:  pip install -r requirements.txt -r requirements-dev.txt
+pytest>=8.0,<9
+# >=1.0 required: asyncio_default_test_loop_scope did not exist before it, and
+# without that setting tests and the session-scoped engine land on different
+# event loops, which asyncpg rejects.
+pytest-asyncio>=1.0,<2

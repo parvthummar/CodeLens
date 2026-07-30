@@ -64,10 +64,32 @@ once step 3 makes the attempt survivable.
 
 ## 3. The sequence
 
-### Step 1 — Tests
+### Step 1 — Tests ✅ done
+
+**151 tests, all passing.** 35 need no database and run in ~5 s
+(`pytest -m "not db"`); the rest use Postgres and take ~3.5 min, almost entirely
+network latency to Neon. A local Postgres container in step 2 will cut that
+sharply.
+
+Isolation works by SAVEPOINT: the session is bound to a connection whose outer
+transaction is always rolled back, and
+`join_transaction_mode="create_savepoint"` turns a service's `commit()` into a
+savepoint release. Production code needed no test-only branches, and the suite
+leaves zero rows behind. An autouse fixture makes the OpenAI and Pinecone
+clients raise, so a missing stub fails loudly instead of spending money.
+
+Two findings worth recording:
+
+- **`get_by_ids` had no project scoping**, so a stale or mismatched Pinecone id
+  could surface another project's source. Namespaces prevented it in practice,
+  but `project_id` is now a required argument. Found by writing the test.
+- `pytest-asyncio` must be `>=1.0`. Before that,
+  `asyncio_default_test_loop_scope` does not exist, tests and the session-scoped
+  engine land on different event loops, and asyncpg fails with "another
+  operation is in progress".
 
 **Why first.** Everything after this is a refactor of working code. Tests are
-what make those refactors safe, and there are currently none in the repo.
+what make those refactors safe, and there were none in the repo.
 
 **Work.** A `backend/tests/` suite with `pytest` + `pytest-asyncio`. Most of the
 logic already exists as throwaway verification scripts written during the

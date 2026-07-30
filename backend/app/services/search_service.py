@@ -32,7 +32,7 @@ async def search_project(
             continue
         ranked.append((entity_id, match.get("score", 0.0)))
 
-    entities = await get_by_ids(db, [entity_id for entity_id, _ in ranked])
+    entities = await get_by_ids(db, project.id, [entity_id for entity_id, _ in ranked])
 
     results: list[SearchResult] = []
     for entity_id, score in ranked:  # preserve Pinecone's ordering

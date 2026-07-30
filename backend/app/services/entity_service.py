@@ -111,11 +111,21 @@ async def delete_missing(
     return list(result.scalars().all())
 
 
-async def get_by_ids(db: AsyncSession, ids: list[int]) -> dict[int, Entity]:
-    """Hydrate entities for search results."""
+async def get_by_ids(
+    db: AsyncSession, project_id: uuid.UUID, ids: list[int]
+) -> dict[int, Entity]:
+    """Hydrate entities for search results, scoped to one project.
+
+    project_id is required rather than optional: ids arrive from Pinecone, and
+    scoping here means a stale or mismatched vector id can never surface another
+    project's source. Namespaces already separate projects, so this is
+    defence in depth.
+    """
     if not ids:
         return {}
-    result = await db.execute(select(Entity).where(Entity.id.in_(ids)))
+    result = await db.execute(
+        select(Entity).where(Entity.project_id == project_id, Entity.id.in_(ids))
+    )
     return {e.id: e for e in result.scalars().all()}
 
 
