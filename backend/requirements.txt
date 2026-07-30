@@ -5,10 +5,11 @@ python-dotenv
 pydantic-settings
 python-multipart
 
-# Database (pinned for compatibility)
-beanie>=1.26,<2
-motor>=3.5,<3.7
-pymongo>=4.5,<4.9
+# Database — Postgres (Neon)
+sqlalchemy[asyncio]>=2.0,<2.1
+asyncpg>=0.29,<0.31
+alembic>=1.13,<2
+greenlet>=3.0
 
 # Auth
 python-jose[cryptography]
