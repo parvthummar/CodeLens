@@ -61,7 +61,7 @@ async def search_project(
 ):
     project = await project_service.get_project(db, current_user, project_id)
     try:
-        results = await search_service.search_project(project, body.query, body.top_k)
+        results = await search_service.search_project(db, project, body.query, body.top_k)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     return SearchResponse(results=results)

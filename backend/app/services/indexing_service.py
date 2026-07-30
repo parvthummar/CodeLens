@@ -8,11 +8,16 @@ from app.db.postgres import session_scope
 from app.models.project import Project, ProjectStatus
 from app.services import (
     embedding_service,
+    entity_service,
     github_service,
     llm_service,
     parser_service,
     pinecone_service,
 )
+
+# Rows per INSERT ... ON CONFLICT, each committed on its own so a failure late
+# in a large repo does not discard the work already persisted.
+_DB_BATCH = 500
 
 
 async def _load_project(project_id: uuid.UUID) -> tuple[str, str] | None:
@@ -55,6 +60,35 @@ async def _set_status(
         await db.commit()
 
 
+async def _persist_entities(
+    project_id: uuid.UUID,
+    entities: list[parser_service.CodeEntity],
+    descriptions: list[str],
+) -> tuple[dict[tuple[str, str], int], list[int]]:
+    """Write entities to Postgres.
+
+    Returns the id assigned to each entity keyed by (file_path, qualname), plus
+    the ids of entities that existed before this run and no longer do.
+    """
+    rows = entity_service.build_rows(project_id, entities, descriptions)
+
+    id_by_key: dict[tuple[str, str], int] = {}
+    for start in range(0, len(rows), _DB_BATCH):
+        async with session_scope() as db:
+            id_by_key.update(
+                await entity_service.upsert_entities(db, rows[start : start + _DB_BATCH])
+            )
+            await db.commit()
+
+    async with session_scope() as db:
+        removed_ids = await entity_service.delete_missing(
+            db, project_id, list(id_by_key.values())
+        )
+        await db.commit()
+
+    return id_by_key, removed_ids
+
+
 async def run_indexing_pipeline(project_id: str) -> None:
     pid = uuid.UUID(project_id)
     dest_dir = None
@@ -71,37 +105,39 @@ async def run_indexing_pipeline(project_id: str) -> None:
 
         await _set_status(pid, ProjectStatus.INDEXING)
 
-        entities = parser_service.parse_codebase(dest_dir)
-        if not entities:
-            await _set_status(pid, ProjectStatus.READY)
-            return
+        # Collapse duplicate definitions before anything expensive happens, so
+        # we neither describe nor embed a row that will be discarded.
+        entities = entity_service.dedupe(parser_service.parse_codebase(dest_dir))
 
-        descriptions = await llm_service.generate_descriptions_batch(entities)
-        embeddings = await embedding_service.embed_texts(descriptions)
+        if entities:
+            descriptions = await llm_service.generate_descriptions_batch(entities)
+            embeddings = await embedding_service.embed_texts(descriptions)
+        else:
+            descriptions, embeddings = [], []
 
-        # Pinecone metadata limit is 40 960 bytes per vector.
-        # Truncate source code to keep the total payload well under that.
-        _MAX_CODE_BYTES = 20_000
+        # Postgres first: the vector ID *is* the row ID, so the rows have to
+        # exist before there is anything to key vectors on. A crash between the
+        # two leaves rows without vectors, which search tolerates by skipping
+        # ids it cannot hydrate.
+        id_by_key, removed_ids = await _persist_entities(pid, entities, descriptions)
 
-        vectors = []
-        for i, entity in enumerate(entities):
-            vector_id = f"{project_id}_{i}"
-            code = entity.source_code
-            if len(code.encode("utf-8")) > _MAX_CODE_BYTES:
-                code = code.encode("utf-8")[:_MAX_CODE_BYTES].decode("utf-8", errors="ignore") + "\n# … (truncated)"
-            metadata = {
-                "name": entity.name,
-                "entity_type": entity.entity_type,
-                "code": code,
-                "signature": entity.signature,
-                "description": descriptions[i],
-                "file_path": entity.file_path,
-                "start_line": entity.start_line,
-                "end_line": entity.end_line
-            }
-            vectors.append((vector_id, embeddings[i], metadata))
+        vectors = [
+            (
+                str(id_by_key[(entity.file_path, entity.name)]),
+                embeddings[i],
+                # Metadata stays minimal — the namespace already scopes by
+                # project and everything else is hydrated from Postgres.
+                # entity_type is kept so Pinecone can filter on it later.
+                {"entity_type": entity.entity_type},
+            )
+            for i, entity in enumerate(entities)
+        ]
 
         await pinecone_service.upsert_vectors(namespace, vectors)
+        if removed_ids:
+            await pinecone_service.delete_vectors(
+                namespace, [str(i) for i in removed_ids]
+            )
 
         await _set_status(pid, ProjectStatus.READY)
 
