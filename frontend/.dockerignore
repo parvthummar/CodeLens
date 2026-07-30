@@ -1,0 +1,8 @@
+# Host-built modules may contain platform-specific binaries; npm ci rebuilds
+# them for the image.
+node_modules
+dist
+dist-ssr
+*.local
+*.log
+npm-debug.log*

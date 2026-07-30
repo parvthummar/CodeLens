@@ -1,0 +1,20 @@
+# The venv is a Windows-host artifact; installing into the image is the point.
+cr_venv/
+
+# Secrets are injected at run time, never baked into a layer.
+.env
+.env.*
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+build/
+dist/
+*.egg-info/
+
+*.db
+*.sqlite3
+*.log

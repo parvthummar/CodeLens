@@ -68,8 +68,8 @@ once step 3 makes the attempt survivable.
 
 **151 tests, all passing.** 35 need no database and run in ~5 s
 (`pytest -m "not db"`); the rest use Postgres and take ~3.5 min, almost entirely
-network latency to Neon. A local Postgres container in step 2 will cut that
-sharply.
+network latency to Neon. Step 2 moved that onto a local container and the full
+suite now runs in 38.6 s.
 
 Isolation works by SAVEPOINT: the session is bound to a connection whose outer
 transaction is always rolled back, and
@@ -114,29 +114,68 @@ behaviour makes a specific test fail.
 
 ---
 
-### Step 2 — Docker Compose + CI
+### Step 2 — Docker Compose + CI ✅ done
 
 **Why second, and why before the worker.** The worker needs a second process,
 and Compose is how you express that. It also dissolves the queue-backend
 decision: if Redis is one line in a compose file, "Redis is annoying to install
 on Windows" stops being an argument.
 
-**Work.**
+**What shipped.**
 
-- `backend/Dockerfile` (slim base, non-root user, no venv inside the image)
-- `frontend/Dockerfile` or leave the frontend to `npm run dev` for now
-- `docker-compose.yml` with `api`, `worker`, `postgres`, and optionally `redis`.
-  A local Postgres container also removes the dependency on Neon for
-  development and stops tests burning free-tier compute.
-- `.env.example` committed, real `.env` still ignored
-- Entrypoint runs `alembic upgrade head` before starting
-- GitHub Actions: lint + `pytest` against a Postgres service container
+- `backend/Dockerfile` — `python:3.11-slim` matching the venv, non-root
+  `appuser`, no venv inside the image, `git` installed because
+  `github_service` shells out to it for every index
+- `backend/docker-entrypoint.sh` — runs `alembic upgrade head`, then execs the
+  command. `RUN_MIGRATIONS=false` opts a second container out, so the step 3
+  worker won't race the API through alembic on startup.
+- `frontend/Dockerfile` — Vite dev server with the source bind-mounted. A
+  static build would bake in an API host, and the API base is still hardcoded
+  in `client.js`; this becomes a two-stage build + nginx once step 6 moves it
+  to a Vite env var.
+- `docker-compose.yml` — `postgres` (healthchecked, published on 5432 so the
+  test suite can reach it from the host), `api`, `frontend`, and `redis`
+  behind a `queue` profile so it is one flag away without prejudging §5
+- `backend/.env.example`, plus a `!backend/.env.example` negation in
+  `.gitignore` — the existing `backend/.env.*` pattern was swallowing it
+- `.gitattributes` forcing LF on `*.sh`: a Windows checkout otherwise gives the
+  entrypoint CRLF endings and the container dies on the shebang with a "no such
+  file or directory" that names a file that plainly exists
+- `backend/ruff.toml` and `.github/workflows/ci.yml` — three jobs: backend
+  (ruff + alembic + pytest against a Postgres service container), frontend
+  (oxlint + build), and a job that builds both images from the compose file
 
-**Verification.** `docker compose up` on a clean checkout reaches a working app.
-CI green on a pull request.
+**Verification (run, not assumed).** `docker compose up --build` on an empty
+volume: migrations applied, `/health` 200, frontend 200, signup → login →
+authenticated `GET /projects/` round-trips through the containerised Postgres.
+`git clone` confirmed working as uid 10001 inside the API container. The redis
+profile starts on demand and stays out of the default `up`.
 
-**Buys.** A reviewer can run it. Right now they can't without reading the README
-carefully and having their own Neon and Pinecone accounts.
+**Measured: the local Postgres is 5.4× faster for tests.** The full 151-test
+suite runs in **38.6 s** against the compose container versus ~3.5 min against
+Neon. Step 1 guessed this would help; it is most of the wall clock, and it also
+stops the suite burning free-tier compute.
+
+**Two judgement calls worth recording.**
+
+- *No `worker` service yet.* The plan listed one, but there is no worker code
+  until step 3, and a service that exits immediately is worse than an absent
+  one. Adding it is ~10 lines against the same image with `RUN_MIGRATIONS=false`
+  and a different command.
+- *The lint gate is narrow on purpose.* A default ruff ruleset flagged 191
+  violations, 136 of them line-length. Gating on that would have meant
+  reflowing ~40 unrelated lines inside the commit that introduces CI, so the
+  selection is `E4,E7,E9,F,I,W` — undefined names, unused imports, import
+  order, whitespace. That left 19 auto-fixable issues, all applied; one was a
+  genuinely unused import in `test_indexing_service`. Formatting is a separate
+  pass. On the frontend, oxlint exits 0 on warnings, so CI pins
+  `--max-warnings 5` as a ratchet against new ones rather than an unfailable
+  step.
+
+**Buys.** A reviewer can run it. Before this they couldn't without reading the
+README carefully and having their own Neon and Pinecone accounts — now only the
+OpenAI and Pinecone keys are still unavoidable, and everything short of
+indexing and search works without them.
 
 ---
 
@@ -285,8 +324,10 @@ Independent of the sequence above, in rough order of how bad they are:
 
 ## 5. Open decisions
 
-**Where the job queue lives.** Not yet decided; deliberately deferred until
-after step 2, when both options are equally runnable.
+**Where the job queue lives.** Still open. Step 2 was the precondition and it is
+now met: Postgres and Redis are both a `docker compose up` away, so the choice
+can be made on merits rather than on setup cost. `docker compose --profile queue
+up` starts Redis.
 
 | Option | For | Against |
 |---|---|---|

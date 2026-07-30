@@ -31,7 +31,6 @@ from app.db.postgres import build_engine_from_url, get_db
 from app.models.project import Project, ProjectStatus
 from app.models.user import User
 
-
 # --------------------------------------------------------------------------- #
 # Safety net: no test may reach a paid external API.
 # --------------------------------------------------------------------------- #

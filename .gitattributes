@@ -1,0 +1,6 @@
+# Shell scripts run inside Linux containers. Without this, a Windows checkout
+# can give them CRLF endings and the container fails with a confusing
+# "no such file or directory" on the shebang line.
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf
+Dockerfile text eol=lf

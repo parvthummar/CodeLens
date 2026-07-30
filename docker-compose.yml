@@ -1,0 +1,92 @@
+# Local development stack.
+#
+#   cp backend/.env.example backend/.env   # then fill in the API keys
+#   docker compose up --build
+#
+# The database is a local container, so development and the test suite no
+# longer depend on Neon. Anything in backend/.env still wins for the external
+# services (OpenAI, Pinecone, JWT); only the two database URLs are overridden
+# here to point at the postgres service.
+
+name: codelens
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: codelens
+      POSTGRES_PASSWORD: codelens
+      POSTGRES_DB: codelens
+    ports:
+      # Published so the test suite and psql can reach it from the host.
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # -d/-U matter: bare pg_isready reports ready during the init phase, when
+      # the server is briefly up on a socket the app cannot use yet.
+      test: ["CMD-SHELL", "pg_isready -U codelens -d codelens"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  api:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      # Same URL for both: a local container is not behind PgBouncer, so the
+      # pooled/direct distinction that Neon forces does not apply here.
+      DATABASE_URL: postgresql://codelens:codelens@postgres:5432/codelens
+      DATABASE_URL_DIRECT: postgresql://codelens:codelens@postgres:5432/codelens
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # No curl in the slim image, and adding one just for this is not worth a layer.
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8000/health')
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      # Source is bind-mounted for hot reload; the anonymous volume keeps the
+      # image's Linux node_modules from being shadowed by the host's.
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - api
+
+  # Opt in with:  docker compose --profile queue up
+  #
+  # Not enabled by default. Roadmap §5 has not settled whether the step 3 queue
+  # lives in Redis or in Postgres SKIP LOCKED; this exists so that decision can
+  # be made by running both rather than by guessing which is easier to install.
+  redis:
+    image: redis:7-alpine
+    profiles: ["queue"]
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:

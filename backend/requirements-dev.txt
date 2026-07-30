@@ -5,3 +5,6 @@ pytest>=8.0,<9
 # without that setting tests and the session-scoped engine land on different
 # event loops, which asyncpg rejects.
 pytest-asyncio>=1.0,<2
+
+# Linter. Configured in backend/ruff.toml; CI runs `ruff check .` from backend/.
+ruff>=0.16,<1

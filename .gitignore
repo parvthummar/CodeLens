@@ -4,6 +4,8 @@ backend/cr_venv/
 # Environment variables
 backend/.env
 backend/.env.*
+# ...except the committed template, which the pattern above would otherwise catch.
+!backend/.env.example
 
 # Python cache
 backend/**/__pycache__/

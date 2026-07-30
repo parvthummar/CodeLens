@@ -29,14 +29,46 @@ Only Python source files are indexed. The pipeline status (queued → cloning �
 
 ## Getting Started
 
-### Prerequisites
-- Python 3.10+
-- Node.js 18+
-- A Postgres database (local, or a managed one such as Neon)
-- OpenAI API key
-- Pinecone account with an index created at **dimension 1024**
+The quickest path is Docker Compose, which brings up Postgres, the API and the
+frontend together. Running the pieces directly on your machine is documented
+below it.
 
-### Backend
+Either way you need an **OpenAI API key** and a **Pinecone index created at
+dimension 1024** — those are external services with no local substitute. Signup,
+login and project CRUD work without them; indexing and search do not.
+
+### Docker Compose
+
+```bash
+cp backend/.env.example backend/.env
+# Fill in JWT_SECRET, OPENAI_API_KEY and PINECONE_API_KEY.
+# Leave the DATABASE_URL lines alone — compose points them at the postgres
+# container regardless.
+
+docker compose up --build
+```
+
+- Frontend → http://localhost:5173
+- API → http://127.0.0.1:8000 (docs at `/docs`)
+- Postgres → `localhost:5432`, user/password/database all `codelens`
+
+Migrations run automatically from the API container's entrypoint, so a clean
+checkout reaches a working app in one command. Postgres data persists in the
+`postgres_data` volume; `docker compose down -v` resets it.
+
+The frontend container runs the Vite dev server with the source bind-mounted,
+so edits hot-reload. Backend changes need `docker compose up --build api`.
+
+A Redis service is defined but not started by default — `docker compose
+--profile queue up` enables it. It is there for the worker-queue work in
+[the roadmap](docs/roadmap.md), which has not picked a queue backend yet.
+
+### Running without Docker
+
+Prerequisites: Python 3.11, Node.js 18+, and a Postgres database (local, or a
+managed one such as Neon).
+
+#### Backend
 
 ```bash
 # Create and activate a virtual environment
@@ -47,26 +79,8 @@ backend\cr_venv\Scripts\Activate.ps1   # Windows
 pip install -r backend/requirements.txt
 ```
 
-Create `backend/.env`:
-
-```env
-# Pooled connection, used by the app
-DATABASE_URL=postgresql://user:pass@host/db?sslmode=require
-# Direct connection (no PgBouncer), used by Alembic. On Neon this is the same
-# host without "-pooler". Falls back to DATABASE_URL if unset.
-DATABASE_URL_DIRECT=
-
-JWT_SECRET=
-
-OPENAI_API_KEY=
-OPENAI_EMBEDDING_MODEL=
-OPENAI_EMBEDDING_DIMENSIONS=
-OPENAI_LLM_MODEL=
-
-PINECONE_API_KEY=
-PINECONE_INDEX_NAME=
-PINECONE_INDEX_HOST=
-```
+Create `backend/.env` by copying `backend/.env.example`, which documents every
+key including the pooled-vs-direct database URL split that Alembic needs.
 
 Create the schema, then run the API:
 
@@ -84,7 +98,7 @@ uvicorn app.main:app --reload
 # Docs → http://127.0.0.1:8000/docs
 ```
 
-### Frontend
+#### Frontend
 
 ```bash
 cd frontend
@@ -92,6 +106,33 @@ npm install
 npm run dev
 # App → http://localhost:5173
 ```
+
+## Tests and Lint
+
+The suite is 151 tests. 35 of them need no database:
+
+```bash
+cd backend
+pip install -r requirements.txt -r requirements-dev.txt
+
+pytest -m "not db"   # ~5 s, no database
+pytest               # everything; needs DATABASE_URL_DIRECT and a migrated schema
+ruff check .
+```
+
+Against the compose Postgres, `DATABASE_URL_DIRECT` in `backend/.env` already
+points at `localhost:5432`, so `docker compose up -d postgres` is enough to run
+the full suite from the host. Tests roll back everything they write.
+
+```bash
+cd frontend
+npm run lint     # oxlint, not ESLint
+npm run build
+```
+
+CI (`.github/workflows/ci.yml`) runs all of the above on every push and pull
+request, with Postgres as a service container, plus a job that builds both
+Docker images.
 
 ## Project Structure
 

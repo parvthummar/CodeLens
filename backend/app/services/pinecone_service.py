@@ -1,5 +1,7 @@
 import asyncio
+
 from pinecone import Pinecone
+
 from app.config import settings
 
 _index = None

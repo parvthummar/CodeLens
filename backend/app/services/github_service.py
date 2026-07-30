@@ -1,6 +1,6 @@
 import asyncio
-import subprocess
 import shutil
+import subprocess
 
 
 async def clone_repo(repo_url: str, dest_dir: str) -> None:

@@ -13,7 +13,6 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 
-from app.models.project import ProjectStatus
 from app.services import (
     embedding_service,
     entity_service,
