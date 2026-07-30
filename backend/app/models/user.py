@@ -1,15 +1,19 @@
-from beanie import Document, Indexed
-from pydantic import EmailStr, Field
-from datetime import datetime, timezone
+from sqlalchemy import Boolean, String, text
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
-class User(Document):
-    email: Indexed(EmailStr, unique=True)
-    hashed_password: str
-    full_name: str | None = None
-    is_active: bool = True
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    __tablename__ = "users"
 
-    class Settings:
-        name = "users"
+    # 320 = 64-char local part + "@" + 255-char domain, the RFC ceiling.
+    email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+
+    def __repr__(self) -> str:
+        return f"<User {self.email}>"

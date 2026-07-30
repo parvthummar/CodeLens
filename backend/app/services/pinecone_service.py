@@ -51,6 +51,20 @@ async def query_vectors(namespace: str, embedding: list[float], top_k: int = 10)
     return result.to_dict().get("matches", [])
 
 
+async def delete_vectors(namespace: str, ids: list[str]) -> None:
+    """Delete specific vectors by id, in batches of 1000."""
+    if not ids:
+        return
+    index = _get_index()
+    batch_size = 1000
+
+    def _delete_chunk(chunk):
+        index.delete(ids=chunk, namespace=namespace)
+
+    for i in range(0, len(ids), batch_size):
+        await asyncio.to_thread(_delete_chunk, ids[i : i + batch_size])
+
+
 async def delete_namespace(namespace: str) -> None:
     """Delete all vectors in a Pinecone namespace."""
     index = _get_index()

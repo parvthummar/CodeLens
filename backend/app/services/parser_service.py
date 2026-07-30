@@ -1,7 +1,8 @@
 import ast
+import hashlib
 import os
 import pathlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
 class CodeEntity:
@@ -12,6 +13,13 @@ class CodeEntity:
     file_path: str
     start_line: int
     end_line: int
+    # Derived, so the construction sites below stay unchanged. Hashes the source
+    # only: an entity that merely moved to a different line is unchanged for
+    # re-indexing purposes and should not need a fresh LLM description.
+    content_hash: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.content_hash = hashlib.sha256(self.source_code.encode("utf-8")).hexdigest()
 
 def _build_func_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     args = []

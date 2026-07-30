@@ -1,33 +1,29 @@
+import uuid
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel
-from app.models.project import Project
+
+from pydantic import BaseModel, ConfigDict
+
+from app.models.project import ProjectStatus
+
 
 class ProjectCreateRequest(BaseModel):
     github_repo_url: str
     name: Optional[str] = None
 
+
 class ProjectResponse(BaseModel):
-    id: str
+    # from_attributes lets FastAPI validate the ORM object a route returns
+    # directly, so no hand-written field mapping is needed.
+    model_config = ConfigDict(from_attributes=True)
+
+    # Serialises to the same opaque string the frontend already treats IDs as.
+    id: uuid.UUID
     name: str
     github_repo_url: str
     github_owner: str
     github_repo_name: str
-    status: str
+    status: ProjectStatus
     error_message: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-
-    @classmethod
-    def from_document(cls, project: Project) -> "ProjectResponse":
-        return cls(
-            id=str(project.id),
-            name=project.name,
-            github_repo_url=project.github_repo_url,
-            github_owner=project.github_owner,
-            github_repo_name=project.github_repo_name,
-            status=project.status,
-            error_message=project.error_message,
-            created_at=project.created_at,
-            updated_at=project.updated_at,
-        )

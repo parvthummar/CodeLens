@@ -2,19 +2,22 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
-from app.db.mongodb import init_db, close_db
 from app.api.v1.router import v1_router
+from app.db.postgres import dispose_engine, get_engine
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
-    await init_db()
-    print("[OK] MongoDB connected & Beanie initialised")
+    # Fail fast on a bad DATABASE_URL rather than surfacing it on first request.
+    async with get_engine().connect() as conn:
+        await conn.execute(text("SELECT 1"))
+    print("[OK] Postgres reachable")
     yield
-    await close_db()
-    print("[STOP] MongoDB connection closed")
+    await dispose_engine()
+    print("[STOP] Postgres connection pool closed")
 
 
 app = FastAPI(

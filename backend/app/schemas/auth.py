@@ -1,6 +1,7 @@
+import uuid
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 class SignupRequest(BaseModel):
     email: EmailStr
@@ -16,7 +17,9 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 class UserResponse(BaseModel):
-    id: str
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
     email: str
     full_name: Optional[str] = None
     is_active: bool
