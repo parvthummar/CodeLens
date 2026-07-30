@@ -7,8 +7,8 @@ A semantic code search tool that lets you search any public GitHub repository us
 1. **Connect a repo** — paste any public GitHub URL and submit
 2. **Indexing runs in the background** — the backend clones the repo, parses every `.py` file using Python's `ast` module, and extracts all functions, classes, and methods
 3. **LLM descriptions** — GPT-4o-mini generates a 2–3 sentence behavioural description for each code entity
-4. **Vector embeddings** — descriptions are embedded with `text-embedding-3-small` (1024 dimensions) and stored in Pinecone under a project-specific namespace
-5. **Search** — your query is embedded and compared against the stored vectors; the top results are returned with their file path, line number, description, and relevance score
+4. **Storage** — entity records (source, signature, description, line numbers, content hash) are written to Postgres; their embeddings go to Pinecone under a project-specific namespace, keyed on the Postgres row id
+5. **Search** — your query is embedded and ranked against Pinecone, which returns entity ids and scores; the full records are then hydrated from Postgres and returned with file path, line numbers, description, and relevance score
 
 Only Python source files are indexed. The pipeline status (queued → cloning → indexing → ready) is shown live in the UI with 3-second polling.
 
@@ -16,8 +16,8 @@ Only Python source files are indexed. The pipeline status (queued → cloning �
 
 ### Backend
 - **FastAPI** — async REST API with background tasks for the indexing pipeline
-- **MongoDB** (Motor + Beanie ODM) — stores users and project metadata
-- **Pinecone** — vector database for storing and querying code embeddings
+- **Postgres** (SQLAlchemy 2.0 async + asyncpg, Alembic migrations) — users, projects, and parsed code entities
+- **Pinecone** — vector database for the embeddings; entity records live in Postgres, so Pinecone holds only vectors keyed on `entities.id`
 - **OpenAI API** — `gpt-4o-mini` for description generation, `text-embedding-3-small` for embeddings
 - **Python AST** — parses source files without executing them
 - **JWT + bcrypt** — authentication with `python-jose` and `passlib`
@@ -32,7 +32,7 @@ Only Python source files are indexed. The pipeline status (queued → cloning �
 ### Prerequisites
 - Python 3.10+
 - Node.js 18+
-- A MongoDB instance (local or Atlas)
+- A Postgres database (local, or a managed one such as Neon)
 - OpenAI API key
 - Pinecone account with an index created at **dimension 1024**
 
@@ -50,8 +50,11 @@ pip install -r backend/requirements.txt
 Create `backend/.env`:
 
 ```env
-MONGO_URI=
-MONGO_DB_NAME=
+# Pooled connection, used by the app
+DATABASE_URL=postgresql://user:pass@host/db?sslmode=require
+# Direct connection (no PgBouncer), used by Alembic. On Neon this is the same
+# host without "-pooler". Falls back to DATABASE_URL if unset.
+DATABASE_URL_DIRECT=
 
 JWT_SECRET=
 
@@ -65,8 +68,17 @@ PINECONE_INDEX_NAME=
 PINECONE_INDEX_HOST=
 ```
 
+Create the schema, then run the API:
+
 ```bash
 cd backend
+
+# Optional: verify the database connection and pooling config first
+python scripts/check_db.py
+
+# Apply migrations (required — the app does not create tables itself)
+alembic upgrade head
+
 uvicorn app.main:app --reload
 # API → http://127.0.0.1:8000
 # Docs → http://127.0.0.1:8000/docs
@@ -84,11 +96,15 @@ npm run dev
 ## Project Structure
 
 ```
-backend/app/
-  api/v1/         auth + project routes
-  services/       github, parser, llm, embedding, pinecone, indexing, search
-  models/         MongoDB documents (User, Project)
-  core/           JWT, bcrypt, FastAPI dependencies
+backend/
+  alembic/        migrations
+  scripts/        check_db.py connection smoke test
+  app/
+    api/v1/       auth + project routes
+    services/     github, parser, llm, embedding, pinecone, entity, indexing, search
+    models/       SQLAlchemy models (User, Project, Entity)
+    db/           async engine, session factory, get_db dependency
+    core/         JWT, bcrypt, FastAPI dependencies
 
 frontend/src/
   pages/          Login, Signup, Dashboard, AddProject, ProjectDetail, Search
