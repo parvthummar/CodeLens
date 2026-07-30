@@ -11,7 +11,11 @@ from app.models.user import User
 
 
 class ProjectStatus(str, Enum):
+    # Created but not yet handed to the queue. Only reachable now if the API
+    # dies between the INSERT and the enqueue; kept because rows predating the
+    # worker still carry it, and the reconciler treats it as queued.
     PENDING = "pending"
+    QUEUED = "queued"
     CLONING = "cloning"
     INDEXING = "indexing"
     READY = "ready"

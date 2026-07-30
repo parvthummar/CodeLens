@@ -5,17 +5,20 @@ A semantic code search tool that lets you search any public GitHub repository us
 ## How It Works
 
 1. **Connect a repo** — paste any public GitHub URL and submit
-2. **Indexing runs in the background** — the backend clones the repo, parses every `.py` file using Python's `ast` module, and extracts all functions, classes, and methods
+2. **Indexing runs in a separate worker** — the API writes a job row and returns; a worker process clones the repo, parses every `.py` file using Python's `ast` module, and extracts all functions, classes, and methods
 3. **LLM descriptions** — GPT-4o-mini generates a 2–3 sentence behavioural description for each code entity
 4. **Storage** — entity records (source, signature, description, line numbers, content hash) are written to Postgres; their embeddings go to Pinecone under a project-specific namespace, keyed on the Postgres row id
 5. **Search** — your query is embedded and ranked against Pinecone, which returns entity ids and scores; the full records are then hydrated from Postgres and returned with file path, line numbers, description, and relevance score
 
 Only Python source files are indexed. The pipeline status (queued → cloning → indexing → ready) is shown live in the UI with 3-second polling.
 
+Entities flow through describe → embed → write in chunks of 200 rather than being staged whole, so peak memory is bounded by the chunk size instead of by repository size, and each chunk is durable in both stores before the next one starts. A failed run is retried with exponential backoff; a worker that dies mid-run stops writing its heartbeat, and a reconciler requeues whatever it was holding.
+
 ## Tech Stack
 
 ### Backend
-- **FastAPI** — async REST API with background tasks for the indexing pipeline
+- **FastAPI** — async REST API; it enqueues indexing work and never runs it
+- **ARQ + Redis** — job delivery to the worker. Job *state* (attempts, backoff, heartbeat, progress) lives in Postgres, so an undelivered job is recoverable and claiming is an atomic UPDATE rather than a Redis pop
 - **Postgres** (SQLAlchemy 2.0 async + asyncpg, Alembic migrations) — users, projects, and parsed code entities
 - **Pinecone** — vector database for the embeddings; entity records live in Postgres, so Pinecone holds only vectors keyed on `entities.id`
 - **OpenAI API** — `gpt-4o-mini` for description generation, `text-embedding-3-small` for embeddings
@@ -51,6 +54,11 @@ docker compose up --build
 - Frontend → http://localhost:5173
 - API → http://127.0.0.1:8000 (docs at `/docs`)
 - Postgres → `localhost:5432`, user/password/database all `codelens`
+- Redis → `localhost:6379`; the `worker` service consumes from it
+
+Run more than one worker with `docker compose up -d --scale worker=2`. Jobs are
+claimed with an atomic UPDATE in Postgres, so extra workers share the queue
+rather than duplicating work.
 
 Migrations run automatically from the API container's entrypoint, so a clean
 checkout reaches a working app in one command. Postgres data persists in the
@@ -107,9 +115,20 @@ npm run dev
 # App → http://localhost:5173
 ```
 
+### Running the worker without Docker
+
+```bash
+cd backend
+arq app.worker.WorkerSettings
+```
+
+Needs `REDIS_URL` pointing at a running Redis. Without a worker the API still
+serves everything except indexing — projects sit in `queued` until one starts,
+at which point its reconciler picks them up.
+
 ## Tests and Lint
 
-The suite is 151 tests. 35 of them need no database:
+The suite is 228 tests. 35 of them need no database, and none need Redis:
 
 ```bash
 cd backend
@@ -161,7 +180,8 @@ frontend/src/
 | POST | `/api/v1/auth/signup` | Register a new user |
 | POST | `/api/v1/auth/login` | Login, returns JWT |
 | GET | `/api/v1/projects/` | List user's projects |
-| POST | `/api/v1/projects/` | Add a new project (triggers indexing) |
+| POST | `/api/v1/projects/` | Add a new project (queues indexing) |
 | GET | `/api/v1/projects/{id}` | Get project status |
+| POST | `/api/v1/projects/{id}/reindex` | Queue another indexing run (409 if one is already active) |
 | DELETE | `/api/v1/projects/{id}` | Delete project + Pinecone vectors |
 | POST | `/api/v1/projects/{id}/search` | Semantic search |

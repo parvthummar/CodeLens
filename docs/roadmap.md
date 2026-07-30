@@ -33,11 +33,13 @@ correct top hit for plain-English queries.
 - Entity writes batch at 500 rows with a commit per batch, so a late failure
   doesn't discard earlier work
 
-**The headline problem that remains.** Indexing still runs inside the web
-process via FastAPI `BackgroundTasks` (`api/v1/projects.py`). This was measured,
-not assumed: kill the server mid-index and the project sits in `indexing`
-**forever** — no retry, no reconciler, no way for a user to recover it. Step 3
-is what closes it.
+**The headline problem that remained.** Indexing ran inside the web process via
+FastAPI `BackgroundTasks` (`api/v1/projects.py`). This was measured, not
+assumed: kill the server mid-index and the project sat in `indexing`
+**forever** — no retry, no reconciler, no way for a user to recover it.
+**Closed by step 3**, and the fix was verified by reproducing the failure: a
+`SIGKILL`'d worker leaves the project in `cloning`, and the reconciler brings it
+back to `ready` on the next sweep.
 
 ---
 
@@ -45,20 +47,23 @@ is what closes it.
 
 Not speed. Six properties, and the project currently fails four of them:
 
-| Property | Now |
+| Property | Now (after step 3) |
 |---|---|
-| Work is decoupled from the request lifecycle | ❌ indexing runs in the API process |
-| Resource use per unit of work is bounded | 🟡 writes are chunked; the LLM stage fans out one coroutine per entity |
-| You can run N copies | ❌ a second API instance doubles indexing load rather than sharing it |
-| Work survives failure | ❌ one exception is terminal; restart strands the job |
-| Cost grows sub-linearly with data | 🟡 `content_hash` exists but nothing consumes it yet |
-| One tenant can't starve the others | ❌ no repo size cap, quota, or rate limit |
+| Work is decoupled from the request lifecycle | ✅ the API enqueues; a separate worker indexes |
+| Resource use per unit of work is bounded | ✅ chunks of 200 through describe → embed → write, LLM concurrency capped per run, worker concurrency capped per process |
+| You can run N copies | ✅ `--scale worker=2`; claiming is an atomic UPDATE, verified as no double processing |
+| Work survives failure | ✅ retries with backoff, terminal after 3 attempts, heartbeat reconciler for dead workers |
+| Cost grows sub-linearly with data | 🟡 `content_hash` exists but nothing consumes it yet — step 4 |
+| One tenant can't starve the others | 🟡 the queue serialises work now, but there is still no repo size cap, quota, or rate limit — step 6 |
 
 Scale estimate, extrapolated from a measured 56-entity run at ~0.36 s/entity: a
 Django-sized repo (~15,000 entities) would take **~1.5 hours in a single
 process**, holding ~15,000 coroutines and ~15,000 × 1024 floats in memory, with
-no checkpoint. That is arithmetic, not a measurement — worth measuring for real
-once step 3 makes the attempt survivable.
+no checkpoint. That is arithmetic, not a measurement.
+
+Step 3 removed the memory half of it — peak is now 200 entities, not 15,000,
+regardless of repo size — and made the run survivable, so the wall clock is
+finally worth measuring for real. Still to do.
 
 ---
 
@@ -179,36 +184,84 @@ indexing and search works without them.
 
 ---
 
-### Step 3 — Worker queue (the big one)
+### Step 3 — Worker queue (the big one) ✅ done
 
 **Why.** This is where most of the scalability work lives — not because a queue
 is magic, but because "move the work out of the request, bound it, chunk it,
 make it retryable" are four faces of the same refactor and much cheaper done
 together.
 
-**Open decision: where the queue lives.** See §5.
+**Decision: Redis + ARQ, with job state in Postgres.** §5 is settled. ARQ
+delivers a job id to a worker and bounds how many run at once; that is all it
+does. Everything durable — status, attempts, `run_after`, `last_error`,
+heartbeat, progress — lives in an `indexing_jobs` table.
 
-**Work.**
+That split is what answers the objection §5 raised against Redis. Enqueue and
+the DB commit *can* still diverge, but the divergence is no longer lossy: the
+job row commits in the same transaction as the project row, so if the Redis
+enqueue fails the row still reads `queued` and the reconciler delivers it. The
+API's enqueue is deliberately allowed to fail silently for exactly this reason.
+It also means the atomic DB claim, not Redis, is what guarantees a job runs
+once — which is the property that actually matters and the one Redis alone
+could not provide.
 
-- A `worker` process that consumes jobs; the API only enqueues
-- An `indexing_jobs` record with `status`, `attempts`, `run_after`,
-  `last_error`, and a heartbeat column
-- **Startup reconciler** — jobs claimed but not finished (stale heartbeat) get
-  requeued or failed. This is the specific fix for the stranded-project bug.
-- Retries with exponential backoff and a terminal failure state after N attempts
-- **Stream the pipeline.** Currently `parse → describe all → embed all → write
-  all`. Change to chunks of ~200 entities flowing through describe → embed →
-  write, checkpointing per chunk. This is what kills the 15,000-coroutine
-  problem and makes a large repo resumable rather than all-or-nothing.
-- Bounded worker concurrency, so ten users adding repos queues rather than
-  launching ten simultaneous clones and ~100 in-flight LLM calls
-- Add `POST /projects/{id}/reindex` — needed to exercise retries, and useful
-- Add a `queued` status; the frontend stepper already labels `pending` as
-  "Queued" so the UI copes
+**What shipped.**
 
-**Verification.** Kill the worker mid-index; on restart the job resumes or
-retries and the project reaches `ready`. Kill the API mid-index; indexing
-continues unaffected. Run two workers and confirm no job is processed twice.
+- `app/worker.py`, run as `arq app.worker.WorkerSettings`. The API only writes
+  a job row and hands the id to Redis; `BackgroundTasks` is gone.
+- `indexing_jobs` with `status`, `attempts`, `run_after`, `last_error`,
+  `heartbeat_at`, and `entities_done` / `entities_total` checkpoints
+- `job_service.claim` — one conditional UPDATE. A job is claimable if it is
+  queued and due, or running with a stale heartbeat. Two workers handed the
+  same message: exactly one gets a row.
+- **Attempts increment on claim, not on failure.** A job that kills its worker
+  outright never reports a failure; counting only clean failures would retry it
+  forever.
+- **Reconciler, at startup *and* every 30 s.** Startup alone turned out to be
+  insufficient: restart quickly enough and the dead worker's heartbeat is not
+  yet stale, so the startup pass correctly skips the job — and with no later
+  pass, nothing ever looks at it again. That is the same stranded-job bug in a
+  narrower window, so the sweep repeats.
+- Exponential backoff (30 s, capped at 15 min), terminal failure after 3
+  attempts
+- **The pipeline streams.** `parse → describe all → embed all → write all`
+  became chunks of 200 flowing through describe → embed → write → upsert, each
+  chunk durable in both stores before the next starts, with a checkpoint after.
+  Deletion still runs once at the end — an entity is only "missing" relative to
+  the complete run.
+- **The pipeline raises instead of swallowing.** Classifying a failure as
+  transient or terminal is the worker's job. Swallowing every exception is what
+  made a rate limit indistinguishable from a repo that will never parse.
+- `worker_concurrency` (default 2) bounds simultaneous clones and, through
+  them, in-flight LLM calls
+- `POST /projects/{id}/reindex`, guarded with 409 against double-queueing the
+  most expensive operation in the app
+- `queued` status end to end, including the frontend stepper; legacy `pending`
+  rows normalise to it
+
+**Verification — run against the compose stack, not asserted.** Using
+`github.com/mdn/content`: 260 MB, ~13 s to clone, and zero `.py` files, so the
+pipeline runs its full course with a realistically long job and no paid calls
+at all.
+
+| Roadmap criterion | Result |
+|---|---|
+| Kill the worker mid-index | `SIGKILL` during clone left the project in `cloning` with a running job — the old bug, reproduced. Worker restarted, reconciler requeued it, `attempt=2`, project reached `ready`. |
+| Kill the API mid-index | `docker compose stop api`; health check unreachable (`000`), indexing continued and the project reached `ready`. |
+| Two workers, no double processing | Six jobs, two workers: all six `succeeded` with `attempts=1`, and the intersection of the two workers' claim logs was empty. |
+
+Across the whole session: 9 job rows, 10 total claims. The extra claim is the
+worker that got killed — exactly one retry, exactly where one was expected.
+
+**Tests: 151 → 228.** The new ones cover claim contention, backoff, terminal
+failure, the reconciler's three populations, chunk boundaries, and that an
+earlier chunk survives a later failure. None of them need a running Redis —
+`conftest` makes the client raise, so a missing stub fails loudly.
+
+**Still open.** A retry re-describes from the beginning. Per-chunk commits mean
+completed chunks are already durable, but nothing yet *skips* them on the next
+attempt — that is step 4's `content_hash` diff, which is what makes a resumed
+run cheap rather than merely correct.
 
 **Buys.** The strongest engineering story available: a measured failure, a
 designed fix, and a verified result.
@@ -276,7 +329,7 @@ Individually small, collectively the difference between "demo" and "deployed".
 | Item | Detail |
 |---|---|
 | CORS | `main.py` uses `allow_origins=["*"]` with `allow_credentials=True` — an invalid combination browsers reject, and the wrong posture anyway. Read allowed origins from settings. |
-| Error leakage | `indexing_service` stores `repr(e)` and the API returns it. `git clone` stderr can contain the repo URL with embedded credentials. Store detail in logs, return a generic message. |
+| Error leakage | Fixed for indexing in step 3: the detail goes to `indexing_jobs.last_error` and the logs, and the client gets a generic message — `git clone` stderr can contain the repo URL with embedded credentials. The remaining routes still return raw `HTTPException` detail. |
 | Clone URL validation | A user-supplied URL goes straight to `git clone`. It's argv so there's no shell injection, but nothing server-side restricts the scheme or host — `file://` and internal addresses are reachable. The frontend regex is not validation. |
 | Rate limits | None on signup, login, or search. Login is open to credential stuffing; every search is a paid embedding call. |
 | Quotas | No repo size cap and no per-user project limit. One large monorepo is an unbounded bill. |
@@ -306,11 +359,13 @@ steps 1–5 are what earn good interview questions.
 
 Independent of the sequence above, in rough order of how bad they are:
 
-1. Indexing in-process → stranded jobs, no retry *(step 3)*
-2. LLM stage creates one coroutine per entity; nothing bounds memory by repo
-   size *(step 3)*
-3. No tests *(step 1)*
-4. Error messages leak internal detail to the client *(step 6)*
+1. ~~Indexing in-process → stranded jobs, no retry~~ ✅ *(step 3)*
+2. ~~LLM stage creates one coroutine per entity; nothing bounds memory by repo
+   size~~ ✅ *(step 3)*
+3. ~~No tests~~ ✅ *(step 1)*
+4. Error messages leak internal detail to the client *(step 6)* — the indexing
+   path is fixed (the client now gets a generic message and the detail stays in
+   `indexing_jobs.last_error`); the other routes still leak
 5. Clone URL unvalidated server-side *(step 6)*
 6. CORS wildcard with credentials *(step 6)*
 7. No rate limits or quotas *(step 6)*
@@ -324,23 +379,26 @@ Independent of the sequence above, in rough order of how bad they are:
 
 ## 5. Open decisions
 
-**Where the job queue lives.** Still open. Step 2 was the precondition and it is
-now met: Postgres and Redis are both a `docker compose up` away, so the choice
-can be made on merits rather than on setup cost. `docker compose --profile queue
-up` starts Redis.
+**Where the job queue lives.** ✅ Decided in step 3: **Redis + ARQ for delivery,
+Postgres for job state.**
 
 | Option | For | Against |
 |---|---|---|
 | **Postgres `SKIP LOCKED`** | No new infrastructure. Enqueue commits in the same transaction as the project row, so the two can never disagree. Job history is just SQL. | Worker polls the database. Less conventional than naming Celery. |
-| **Redis + ARQ** | Purpose-built, less code, instant pickup. Async-native, so it fits the existing `asyncio` code. The answer interviewers expect. | Another service. Enqueue and DB commit can diverge. Upstash's free tier (~10k commands/day) does not survive ARQ's default 0.5 s poll. |
+| **Redis + ARQ** ✅ | Purpose-built, less code, instant pickup. Async-native, so it fits the existing `asyncio` code. The answer interviewers expect. | Another service. Enqueue and DB commit can diverge. Upstash's free tier (~10k commands/day) does not survive ARQ's default 0.5 s poll. |
 | **Redis + Celery** | Most conventional. | Poor async support; heavier than this project needs. ARQ is the better fit if Redis wins. |
 
-Current lean: **Postgres `SKIP LOCKED`**, because transactional enqueue removes
-a whole class of drift and there is already exactly one durable store. "I
-evaluated Redis and chose Postgres `SKIP LOCKED` because I already had a
-transactional store and didn't want two sources of truth" is a stronger
-interview answer than naming the default — but this is a judgement call, not a
-fact.
+The "enqueue and DB commit can diverge" objection turned out to be answerable
+rather than disqualifying, and answering it produced a better design than
+either option alone. The job row commits with the project row, so divergence
+means at worst an undelivered job — which the reconciler repairs — never a lost
+one. And because claiming is an atomic Postgres UPDATE rather than a Redis pop,
+the at-most-once guarantee survives duplicate delivery, a Redis flush, or two
+workers racing.
+
+The honest framing: this is a hybrid, and the hybrid exists because Redis on
+its own could not be trusted with the durable record. Pure `SKIP LOCKED` would
+have been less machinery for the same guarantees, at the cost of polling.
 
 ---
 

@@ -19,12 +19,16 @@
   flex-shrink: 0;
 }
 
-.status-pending {
+/* 'pending' is the pre-worker name for the same state; rows created before the
+   queue existed still carry it. */
+.status-pending,
+.status-queued {
   color: var(--warning);
   background-color: rgba(245, 158, 11, 0.15);
 }
 
-.status-pending::before {
+.status-pending::before,
+.status-queued::before {
   background: var(--warning);
   animation: pulse 2s infinite;
 }

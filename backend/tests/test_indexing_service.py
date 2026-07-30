@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 
+from app.models.project import ProjectStatus
 from app.services import (
     embedding_service,
     entity_service,
@@ -71,7 +72,7 @@ def pipeline(db, monkeypatch):
     async def _delete_vectors(namespace, ids):
         calls["deleted_vectors"].append((namespace, list(ids)))
 
-    original_set_status = indexing_service._set_status
+    original_set_status = indexing_service.set_project_status
 
     async def _spy_set_status(project_id, status, *, error_message=None):
         calls["statuses"].append(status.value)
@@ -83,7 +84,7 @@ def pipeline(db, monkeypatch):
     monkeypatch.setattr(embedding_service, "embed_texts", _embed)
     monkeypatch.setattr(pinecone_service, "upsert_vectors", _upsert)
     monkeypatch.setattr(pinecone_service, "delete_vectors", _delete_vectors)
-    monkeypatch.setattr(indexing_service, "_set_status", _spy_set_status)
+    monkeypatch.setattr(indexing_service, "set_project_status", _spy_set_status)
 
     calls["files"] = files
     return calls
@@ -249,40 +250,59 @@ class TestReindex:
 
 
 class TestFailures:
-    async def test_clone_failure_marks_the_project_failed(self, db, project, pipeline, monkeypatch):
+    """The pipeline raises; it does not decide what a failure means.
+
+    Classifying a failure — transient and worth retrying, or terminal — belongs
+    to the worker and job_service. Swallowing exceptions here is what previously
+    made a rate limit indistinguishable from a repo that will never parse.
+    """
+
+    async def test_clone_failure_propagates(self, db, project, pipeline, monkeypatch):
         async def _boom(url, dest):
             raise RuntimeError("git clone failed: repository not found")
 
         monkeypatch.setattr(github_service, "clone_repo", _boom)
-        await indexing_service.run_indexing_pipeline(str(project.id))
 
-        status, error = await status_of(db, project.id)
-        assert status == "failed"
-        assert "repository not found" in error
+        with pytest.raises(RuntimeError, match="repository not found"):
+            await indexing_service.run_indexing_pipeline(str(project.id))
 
-    async def test_llm_failure_marks_the_project_failed(self, db, project, pipeline, monkeypatch):
+    async def test_llm_failure_propagates(self, db, project, pipeline, monkeypatch):
         async def _boom(entities, batch_size=10):
             raise RuntimeError("rate limited")
 
         monkeypatch.setattr(llm_service, "generate_descriptions_batch", _boom)
-        await indexing_service.run_indexing_pipeline(str(project.id))
-        assert (await status_of(db, project.id))[0] == "failed"
 
-    async def test_embedding_failure_marks_the_project_failed(self, db, project, pipeline, monkeypatch):
+        with pytest.raises(RuntimeError, match="rate limited"):
+            await indexing_service.run_indexing_pipeline(str(project.id))
+
+    async def test_embedding_failure_propagates(self, db, project, pipeline, monkeypatch):
         async def _boom(texts):
             raise RuntimeError("embedding service down")
 
         monkeypatch.setattr(embedding_service, "embed_texts", _boom)
-        await indexing_service.run_indexing_pipeline(str(project.id))
-        assert (await status_of(db, project.id))[0] == "failed"
 
-    async def test_pinecone_failure_marks_the_project_failed(self, db, project, pipeline, monkeypatch):
+        with pytest.raises(RuntimeError, match="embedding service down"):
+            await indexing_service.run_indexing_pipeline(str(project.id))
+
+    async def test_pinecone_failure_propagates(self, db, project, pipeline, monkeypatch):
         async def _boom(namespace, vectors):
             raise RuntimeError("pinecone unavailable")
 
         monkeypatch.setattr(pinecone_service, "upsert_vectors", _boom)
-        await indexing_service.run_indexing_pipeline(str(project.id))
-        assert (await status_of(db, project.id))[0] == "failed"
+
+        with pytest.raises(RuntimeError, match="pinecone unavailable"):
+            await indexing_service.run_indexing_pipeline(str(project.id))
+
+    async def test_the_project_is_not_marked_failed_here(self, db, project, pipeline, monkeypatch):
+        """A retryable failure must not surface to the user as 'failed'."""
+        async def _boom(entities, batch_size=10):
+            raise RuntimeError("rate limited")
+
+        monkeypatch.setattr(llm_service, "generate_descriptions_batch", _boom)
+        with pytest.raises(RuntimeError):
+            await indexing_service.run_indexing_pipeline(str(project.id))
+
+        assert (await status_of(db, project.id))[0] != "failed"
 
     async def test_entities_are_still_persisted_when_pinecone_fails(self, db, project, pipeline, monkeypatch):
         """Postgres is written first, so its rows survive a later failure."""
@@ -290,7 +310,9 @@ class TestFailures:
             raise RuntimeError("pinecone unavailable")
 
         monkeypatch.setattr(pinecone_service, "upsert_vectors", _boom)
-        await indexing_service.run_indexing_pipeline(str(project.id))
+        with pytest.raises(RuntimeError):
+            await indexing_service.run_indexing_pipeline(str(project.id))
+
         assert await entity_service.count_for_project(db, project.id) == EXPECTED_ENTITIES
 
     async def test_temp_directory_is_cleaned_up_after_failure(self, db, project, pipeline, monkeypatch):
@@ -298,24 +320,17 @@ class TestFailures:
             raise RuntimeError("nope")
 
         monkeypatch.setattr(llm_service, "generate_descriptions_batch", _boom)
-        await indexing_service.run_indexing_pipeline(str(project.id))
+        with pytest.raises(RuntimeError):
+            await indexing_service.run_indexing_pipeline(str(project.id))
+
         assert not os.path.exists(pipeline["dest_dirs"][0])
 
     async def test_a_later_success_clears_the_error(self, db, project, pipeline, monkeypatch):
-        async def _boom(entities, batch_size=10):
-            raise RuntimeError("transient")
-
-        monkeypatch.setattr(llm_service, "generate_descriptions_batch", _boom)
-        await indexing_service.run_indexing_pipeline(str(project.id))
+        await indexing_service.set_project_status(
+            project.id, ProjectStatus.FAILED, error_message="an earlier attempt"
+        )
         assert (await status_of(db, project.id))[1] is not None
 
-        # Restore just this one stub. monkeypatch.undo() would also revert the
-        # pipeline fixture's patches, including session_scope, and the retry
-        # would not find the (uncommitted) project at all.
-        async def _describe(entities, batch_size=10):
-            return [f"description of {e.name}" for e in entities]
-
-        monkeypatch.setattr(llm_service, "generate_descriptions_batch", _describe)
         await indexing_service.run_indexing_pipeline(str(project.id))
 
         status, error = await status_of(db, project.id)
@@ -323,9 +338,115 @@ class TestFailures:
         assert error is None
 
 
+class TestChunking:
+    """Entities flow through in chunks instead of being staged whole.
+
+    This is what bounds peak memory by chunk size rather than repo size, and
+    what makes each chunk durable before the next one starts.
+    """
+
+    @pytest.fixture
+    def small_chunks(self, monkeypatch):
+        monkeypatch.setattr(indexing_service.settings, "indexing_chunk_size", 2)
+
+    async def test_describes_and_embeds_one_chunk_at_a_time(
+        self, db, project, pipeline, small_chunks
+    ):
+        # 3 entities at a chunk size of 2 -> two passes, not one.
+        await indexing_service.run_indexing_pipeline(str(project.id))
+
+        assert [len(c) for c in pipeline["described"]] == [2, 1]
+        assert [len(e) for e in pipeline["embedded"]] == [2, 1]
+
+    async def test_upserts_vectors_per_chunk(self, db, project, pipeline, small_chunks):
+        await indexing_service.run_indexing_pipeline(str(project.id))
+        assert [len(v) for _, v in pipeline["upserted"]] == [2, 1]
+
+    async def test_every_entity_still_lands_exactly_once(
+        self, db, project, pipeline, small_chunks
+    ):
+        await indexing_service.run_indexing_pipeline(str(project.id))
+        assert await entity_service.count_for_project(db, project.id) == EXPECTED_ENTITIES
+
+    async def test_reports_progress_after_each_chunk(
+        self, db, project, pipeline, small_chunks
+    ):
+        seen = []
+
+        async def _on_progress(done, total):
+            seen.append((done, total))
+
+        await indexing_service.run_indexing_pipeline(
+            str(project.id), on_progress=_on_progress
+        )
+        # An initial zero so total is known up front, then one per chunk.
+        assert seen == [(0, 3), (2, 3), (3, 3)]
+
+    async def test_progress_never_overstates_what_landed(
+        self, db, project, pipeline, small_chunks, monkeypatch
+    ):
+        """Checkpoint after both stores have the chunk, not before."""
+        seen = []
+
+        async def _on_progress(done, total):
+            stored = await entity_service.count_for_project(db, project.id)
+            seen.append((done, stored))
+
+        await indexing_service.run_indexing_pipeline(
+            str(project.id), on_progress=_on_progress
+        )
+        assert all(done <= stored for done, stored in seen)
+
+    async def test_an_earlier_chunk_survives_a_later_failure(
+        self, db, project, pipeline, small_chunks, monkeypatch
+    ):
+        """The whole point of chunking: work already done is not thrown away."""
+        real_embed = embedding_service.embed_texts
+        state = {"calls": 0}
+
+        async def _fail_on_second(texts):
+            state["calls"] += 1
+            if state["calls"] == 2:
+                raise RuntimeError("embedding service down")
+            return await real_embed(texts)
+
+        monkeypatch.setattr(embedding_service, "embed_texts", _fail_on_second)
+
+        with pytest.raises(RuntimeError):
+            await indexing_service.run_indexing_pipeline(str(project.id))
+
+        # The first chunk is committed; the staged pipeline would have kept
+        # everything in memory and lost all of it.
+        assert await entity_service.count_for_project(db, project.id) == 2
+
+    async def test_deletion_waits_for_the_whole_run(
+        self, db, project, pipeline, small_chunks
+    ):
+        """delete_missing is relative to the complete run. Per chunk, it would
+        delete everything the later chunks were about to write."""
+        await indexing_service.run_indexing_pipeline(str(project.id))
+        assert pipeline["deleted_vectors"] == []
+        assert await entity_service.count_for_project(db, project.id) == EXPECTED_ENTITIES
+
+
+class TestResult:
+    async def test_reports_what_it_did(self, db, project, pipeline):
+        result = await indexing_service.run_indexing_pipeline(str(project.id))
+        assert result.entities_indexed == EXPECTED_ENTITIES
+        assert result.entities_removed == 0
+        assert result.chunks == 1
+
+    async def test_counts_removals(self, db, project, pipeline):
+        await indexing_service.run_indexing_pipeline(str(project.id))
+        pipeline["files"]["m.py"] = "class Thing:\n    def go(self):\n        pass\n"
+
+        result = await indexing_service.run_indexing_pipeline(str(project.id))
+        assert result.entities_removed == 1
+
+
 class TestMissingProject:
     async def test_unknown_project_is_a_quiet_noop(self, db, pipeline):
-        # No exception, and nothing external attempted.
-        await indexing_service.run_indexing_pipeline(str(uuid.uuid4()))
+        # Not an error: a project deleted mid-flight is a normal outcome.
+        assert await indexing_service.run_indexing_pipeline(str(uuid.uuid4())) is None
         assert pipeline["cloned"] == []
         assert pipeline["statuses"] == []

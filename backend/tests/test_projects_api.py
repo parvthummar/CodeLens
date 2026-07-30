@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.models.project import ProjectStatus
-from app.services import project_service
+from app.services import job_service, project_service, queue_service
 from tests.conftest import make_project
 
 pytestmark = pytest.mark.db
@@ -16,21 +16,21 @@ REPO = "https://github.com/octocat/Hello-World"
 
 
 @pytest.fixture(autouse=True)
-def no_indexing(monkeypatch):
-    """Stop POST /projects from running the real pipeline.
+def enqueued(monkeypatch):
+    """Capture queue deliveries instead of reaching Redis.
 
-    The pipeline opens its own sessions via session_scope, which bypasses the
-    rollback fixture entirely and would leave committed rows behind.
+    The API no longer runs the pipeline — it writes a job row and hands the id
+    to Redis. Only the second half needs stubbing; the job row is written in the
+    request's own transaction and is rolled back with everything else.
     """
-    enqueued: list[str] = []
+    delivered: list[tuple[str, float]] = []
 
-    async def _fake_pipeline(project_id: str) -> None:
-        enqueued.append(project_id)
+    async def _fake_enqueue(job_id, *, delay_seconds: float = 0) -> bool:
+        delivered.append((str(job_id), delay_seconds))
+        return True
 
-    from app.api.v1 import projects as projects_module
-
-    monkeypatch.setattr(projects_module, "run_indexing_pipeline", _fake_pipeline)
-    return enqueued
+    monkeypatch.setattr(queue_service, "enqueue_job", _fake_enqueue)
+    return delivered
 
 
 @pytest.fixture(autouse=True)
@@ -52,10 +52,10 @@ def headers_for(user) -> dict:
 
 
 class TestCreate:
-    async def test_creates_a_pending_project(self, client, auth_headers):
+    async def test_creates_a_queued_project(self, client, auth_headers):
         r = await client.post(PROJECTS, json={"github_repo_url": REPO}, headers=auth_headers)
         assert r.status_code == 201
-        assert r.json()["status"] == "pending"
+        assert r.json()["status"] == "queued"
 
     async def test_parses_owner_and_repo_from_the_url(self, client, auth_headers):
         r = await client.post(PROJECTS, json={"github_repo_url": REPO}, headers=auth_headers)
@@ -78,9 +78,35 @@ class TestCreate:
         )
         assert r.json()["github_repo_name"] == "Hello-World"
 
-    async def test_indexing_is_enqueued(self, client, auth_headers, no_indexing):
+    async def test_a_job_row_is_written_for_the_project(self, client, auth_headers, db):
         r = await client.post(PROJECTS, json={"github_repo_url": REPO}, headers=auth_headers)
-        assert no_indexing == [r.json()["id"]]
+
+        job = await job_service.latest_for_project(db, uuid.UUID(r.json()["id"]))
+        assert job is not None
+        assert job.status.value == "queued"
+        assert job.attempts == 0
+
+    async def test_the_job_is_handed_to_the_queue(self, client, auth_headers, db, enqueued):
+        r = await client.post(PROJECTS, json={"github_repo_url": REPO}, headers=auth_headers)
+
+        job = await job_service.latest_for_project(db, uuid.UUID(r.json()["id"]))
+        assert enqueued == [(str(job.id), 0)]
+
+    async def test_a_failed_enqueue_still_creates_the_project(
+        self, client, auth_headers, db, monkeypatch
+    ):
+        """Redis being down must not fail the request — the row is the record."""
+        async def _down(job_id, *, delay_seconds: float = 0) -> bool:
+            return False
+
+        monkeypatch.setattr(queue_service, "enqueue_job", _down)
+
+        r = await client.post(PROJECTS, json={"github_repo_url": REPO}, headers=auth_headers)
+        assert r.status_code == 201
+
+        # Still queued in Postgres, which is what the reconciler looks for.
+        job = await job_service.latest_for_project(db, uuid.UUID(r.json()["id"]))
+        assert job.status.value == "queued"
 
     async def test_url_without_owner_and_repo_is_rejected(self, client, auth_headers):
         r = await client.post(
@@ -172,9 +198,58 @@ class TestDelete:
         assert (await client.delete(f"{PROJECTS}{project.id}")).status_code == 401
 
 
+class TestReindex:
+    async def test_queues_a_new_job(self, client, db, user, auth_headers, enqueued):
+        record = make_project(user, status=ProjectStatus.READY)
+        db.add(record)
+        await db.flush()
+
+        r = await client.post(f"{PROJECTS}{record.id}/reindex", headers=auth_headers)
+        assert r.status_code == 200
+        assert r.json()["status"] == "queued"
+
+        job = await job_service.latest_for_project(db, record.id)
+        assert job is not None
+        assert enqueued == [(str(job.id), 0)]
+
+    async def test_clears_a_previous_error(self, client, db, user, auth_headers):
+        record = make_project(user, status=ProjectStatus.FAILED, error_message="boom")
+        db.add(record)
+        await db.flush()
+
+        r = await client.post(f"{PROJECTS}{record.id}/reindex", headers=auth_headers)
+        assert r.json()["error_message"] is None
+
+    async def test_refuses_while_a_run_is_already_queued(
+        self, client, db, user, auth_headers, enqueued
+    ):
+        """Re-indexing is the most expensive operation here; don't pay twice."""
+        record = make_project(user, status=ProjectStatus.READY)
+        db.add(record)
+        await db.flush()
+
+        assert (await client.post(f"{PROJECTS}{record.id}/reindex", headers=auth_headers)).status_code == 200
+        second = await client.post(f"{PROJECTS}{record.id}/reindex", headers=auth_headers)
+
+        assert second.status_code == 409
+        assert len(enqueued) == 1
+
+    async def test_cannot_reindex_another_users_project(
+        self, client, db, other_user, auth_headers
+    ):
+        theirs = make_project(other_user, status=ProjectStatus.READY)
+        db.add(theirs)
+        await db.flush()
+        r = await client.post(f"{PROJECTS}{theirs.id}/reindex", headers=auth_headers)
+        assert r.status_code == 404
+
+    async def test_requires_authentication(self, client, project):
+        assert (await client.post(f"{PROJECTS}{project.id}/reindex")).status_code == 401
+
+
 class TestSearchGuards:
     async def test_searching_an_unindexed_project_is_rejected(self, client, project, auth_headers):
-        """status is pending, so this must fail before any paid call is made."""
+        """status is queued, so this must fail before any paid call is made."""
         r = await client.post(
             f"{PROJECTS}{project.id}/search", json={"query": "anything"}, headers=auth_headers
         )

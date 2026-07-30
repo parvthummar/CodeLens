@@ -41,10 +41,13 @@ services:
       # pooled/direct distinction that Neon forces does not apply here.
       DATABASE_URL: postgresql://codelens:codelens@postgres:5432/codelens
       DATABASE_URL_DIRECT: postgresql://codelens:codelens@postgres:5432/codelens
+      REDIS_URL: redis://redis:6379
     ports:
       - "8000:8000"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       # No curl in the slim image, and adding one just for this is not worth a layer.
@@ -57,6 +60,32 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  worker:
+    build:
+      context: ./backend
+    command: ["arq", "app.worker.WorkerSettings"]
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://codelens:codelens@postgres:5432/codelens
+      DATABASE_URL_DIRECT: postgresql://codelens:codelens@postgres:5432/codelens
+      REDIS_URL: redis://redis:6379
+      # The API container already migrated. Two processes racing through alembic
+      # on a cold start is an avoidable way to fail.
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      # Ordering only, not readiness: the worker does not call the API. This
+      # just keeps the migration ahead of the first job.
+      api:
+        condition: service_started
+    # Scale with:  docker compose up -d --scale worker=2
+    # Jobs are claimed with an atomic UPDATE, so extra workers share the queue
+    # rather than duplicating work.
 
   frontend:
     build:
@@ -71,14 +100,11 @@ services:
     depends_on:
       - api
 
-  # Opt in with:  docker compose --profile queue up
-  #
-  # Not enabled by default. Roadmap §5 has not settled whether the step 3 queue
-  # lives in Redis or in Postgres SKIP LOCKED; this exists so that decision can
-  # be made by running both rather than by guessing which is easier to install.
+  # Job delivery for the worker. Not durable storage — job state lives in the
+  # indexing_jobs table — so `--save ""` is deliberate: losing this container's
+  # contents costs nothing that the reconciler cannot rebuild.
   redis:
     image: redis:7-alpine
-    profiles: ["queue"]
     ports:
       - "6379:6379"
     command: ["redis-server", "--save", "", "--appendonly", "no"]

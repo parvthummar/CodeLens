@@ -8,10 +8,17 @@ import Modal from '../components/Modal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import './ProjectDetail.css';
 
-const STEPS = ['pending', 'cloning', 'indexing', 'ready'];
-const STEP_LABELS = { pending: 'Queued', cloning: 'Cloning', indexing: 'Indexing', ready: 'Ready' };
+const STEPS = ['queued', 'cloning', 'indexing', 'ready'];
+const STEP_LABELS = { queued: 'Queued', cloning: 'Cloning', indexing: 'Indexing', ready: 'Ready' };
 
-function getStepState(stepName, currentStatus) {
+// Projects created before the worker existed still carry 'pending', which meant
+// the same thing: waiting to be picked up.
+const normalize = (status) => (status === 'pending' ? 'queued' : status);
+
+const IN_PROGRESS = ['queued', 'cloning', 'indexing'];
+
+function getStepState(stepName, status) {
+  const currentStatus = normalize(status);
   const currentIdx = STEPS.indexOf(currentStatus);
   const stepIdx = STEPS.indexOf(stepName);
 
@@ -31,6 +38,8 @@ export default function ProjectDetail() {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showDelete, setShowDelete] = useState(false);
+  const [reindexing, setReindexing] = useState(false);
+  const [reindexError, setReindexError] = useState(null);
 
   useEffect(() => {
     api.getProject(id)
@@ -41,14 +50,13 @@ export default function ProjectDetail() {
 
   useEffect(() => {
     if (!project) return;
-    const inProgress = ['pending', 'cloning', 'indexing'];
-    if (!inProgress.includes(project.status)) return;
+    if (!IN_PROGRESS.includes(normalize(project.status))) return;
 
     const interval = setInterval(async () => {
       try {
         const updated = await api.getProject(id);
         setProject(updated);
-        if (!inProgress.includes(updated.status)) clearInterval(interval);
+        if (!IN_PROGRESS.includes(normalize(updated.status))) clearInterval(interval);
       } catch {
         clearInterval(interval);
       }
@@ -60,6 +68,20 @@ export default function ProjectDetail() {
   const handleDelete = async () => {
     await api.deleteProject(id);
     navigate('/dashboard');
+  };
+
+  const handleReindex = async () => {
+    setReindexing(true);
+    setReindexError(null);
+    try {
+      // The response already carries the queued status, so the stepper resets
+      // immediately and the polling effect above restarts on its own.
+      setProject(await api.reindexProject(id));
+    } catch (e) {
+      setReindexError(e.message);
+    } finally {
+      setReindexing(false);
+    }
   };
 
   if (loading) {
@@ -132,9 +154,17 @@ export default function ProjectDetail() {
           </div>
         )}
 
-        {['pending', 'cloning', 'indexing'].includes(project.status) && (
+        {reindexError && (
+          <div className="detail-error">
+            <div className="detail-error-msg">{reindexError}</div>
+          </div>
+        )}
+
+        {IN_PROGRESS.includes(normalize(project.status)) && (
           <div className="detail-progress-note">
-            Indexing in progress — this page auto-refreshes every 3 seconds
+            {normalize(project.status) === 'queued'
+              ? 'Waiting for a worker — this page auto-refreshes every 3 seconds'
+              : 'Indexing in progress — this page auto-refreshes every 3 seconds'}
           </div>
         )}
 
@@ -143,6 +173,11 @@ export default function ProjectDetail() {
             <Link to={`/projects/${project.id}/search`} className="btn-primary detail-search-btn" style={{ textDecoration: 'none' }}>
               Search this Project
             </Link>
+          )}
+          {!IN_PROGRESS.includes(normalize(project.status)) && (
+            <button className="btn-ghost btn-sm" onClick={handleReindex} disabled={reindexing}>
+              {reindexing ? 'Queueing…' : 'Re-index'}
+            </button>
           )}
           <button className="btn-ghost btn-sm btn-delete" onClick={() => setShowDelete(true)}>
             Delete Project

@@ -38,6 +38,7 @@ export const api = {
   getProjects: () => request('/api/v1/projects/'),
   getProject: (id) => request(`/api/v1/projects/${id}`),
   createProject: (data) => request('/api/v1/projects/', { method: 'POST', body: JSON.stringify(data) }),
+  reindexProject: (id) => request(`/api/v1/projects/${id}/reindex`, { method: 'POST' }),
   deleteProject: (id) => request(`/api/v1/projects/${id}`, { method: 'DELETE' }),
   searchProject: (id, data) => request(`/api/v1/projects/${id}/search`, { method: 'POST', body: JSON.stringify(data) }),
 };

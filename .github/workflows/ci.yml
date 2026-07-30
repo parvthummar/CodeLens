@@ -41,9 +41,11 @@ jobs:
       DATABASE_URL: postgresql://codelens:codelens@localhost:5432/codelens
       DATABASE_URL_DIRECT: postgresql://codelens:codelens@localhost:5432/codelens
       JWT_SECRET: ci-only-not-a-real-secret
-      # Left empty on purpose. conftest makes the OpenAI and Pinecone clients
-      # raise, so a test that forgets to stub one fails loudly instead of
-      # reaching a paid API — and there are no keys here for it to reach with.
+      # Left empty on purpose. conftest makes the OpenAI, Pinecone and Redis
+      # clients raise, so a test that forgets to stub one fails loudly instead
+      # of reaching a paid API — and there are no keys here for it to reach
+      # with. No Redis service container either: the suite must not need a
+      # running queue.
       OPENAI_API_KEY: ""
       PINECONE_API_KEY: ""
 

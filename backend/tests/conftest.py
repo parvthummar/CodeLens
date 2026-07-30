@@ -37,10 +37,12 @@ from app.models.user import User
 
 @pytest.fixture(autouse=True)
 def _block_external_calls(monkeypatch):
-    """Make the OpenAI and Pinecone clients unusable.
+    """Make the OpenAI, Pinecone and Redis clients unusable.
 
     Tests stub the service-level functions instead. If a stub is missing, the
-    test fails loudly here rather than quietly spending money.
+    test fails loudly here rather than quietly spending money — or, for Redis,
+    rather than sitting through a connection retry against a port nothing is
+    listening on. The suite must not need a running queue.
     """
 
     def _boom(*args, **kwargs):
@@ -48,11 +50,17 @@ def _block_external_calls(monkeypatch):
             "test attempted a real external API call - stub the service function"
         )
 
-    from app.services import embedding_service, llm_service, pinecone_service
+    from app.services import (
+        embedding_service,
+        llm_service,
+        pinecone_service,
+        queue_service,
+    )
 
     monkeypatch.setattr(llm_service, "_get_client", _boom)
     monkeypatch.setattr(embedding_service, "_get_client", _boom)
     monkeypatch.setattr(pinecone_service, "_get_index", _boom)
+    monkeypatch.setattr(queue_service, "get_pool", _boom)
 
 
 # --------------------------------------------------------------------------- #
@@ -151,7 +159,7 @@ def make_project(owner: User, **overrides) -> Project:
         "github_owner": "octocat",
         "github_repo_name": "Hello-World",
         "pinecone_namespace": str(project_id),
-        "status": ProjectStatus.PENDING,
+        "status": ProjectStatus.QUEUED,
     }
     fields.update(overrides)
     return Project(**fields)
