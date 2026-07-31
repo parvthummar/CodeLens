@@ -22,6 +22,9 @@ email-validator
 # OpenAI
 openai
 
+# Job queue. ARQ delivers jobs to the worker; Postgres owns their state.
+arq>=0.26,<0.27
+
 # Pinecone
 pinecone
 

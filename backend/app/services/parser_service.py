@@ -4,6 +4,7 @@ import os
 import pathlib
 from dataclasses import dataclass, field
 
+
 @dataclass
 class CodeEntity:
     name: str
@@ -41,25 +42,25 @@ def _build_class_signature(node: ast.ClassDef) -> str:
 def parse_codebase(repo_dir: str) -> list[CodeEntity]:
     skip_dirs = {"__pycache__", ".git", "node_modules", ".venv", "venv", "env", ".tox", ".eggs"}
     entities = []
-    
+
     for py_file in pathlib.Path(repo_dir).rglob("*.py"):
         parts = py_file.parts
         if any(skip_dir in parts for skip_dir in skip_dirs) or any(part.endswith('.egg-info') for part in parts):
             continue
-            
+
         try:
             content = py_file.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
-            
+
         try:
             tree = ast.parse(content)
         except SyntaxError:
             continue
-            
+
         lines = content.splitlines()
         file_path_rel = os.path.relpath(py_file, repo_dir)
-        
+
         for node in ast.iter_child_nodes(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 entity_type = "function"
@@ -77,7 +78,7 @@ def parse_codebase(repo_dir: str) -> list[CodeEntity]:
                 source_code = ast.get_source_segment(content, node) or "\n".join(lines[start_line-1:end_line])
                 signature = _build_class_signature(node)
                 entities.append(CodeEntity(class_name, entity_type, source_code, signature, file_path_rel, start_line, end_line))
-                
+
                 for child in node.body:
                     if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         m_name = f"{class_name}.{child.name}"

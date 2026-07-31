@@ -33,11 +33,13 @@ correct top hit for plain-English queries.
 - Entity writes batch at 500 rows with a commit per batch, so a late failure
   doesn't discard earlier work
 
-**The headline problem that remains.** Indexing still runs inside the web
-process via FastAPI `BackgroundTasks` (`api/v1/projects.py`). This was measured,
-not assumed: kill the server mid-index and the project sits in `indexing`
-**forever** — no retry, no reconciler, no way for a user to recover it. Step 3
-is what closes it.
+**The headline problem that remained.** Indexing ran inside the web process via
+FastAPI `BackgroundTasks` (`api/v1/projects.py`). This was measured, not
+assumed: kill the server mid-index and the project sat in `indexing`
+**forever** — no retry, no reconciler, no way for a user to recover it.
+**Closed by step 3**, and the fix was verified by reproducing the failure: a
+`SIGKILL`'d worker leaves the project in `cloning`, and the reconciler brings it
+back to `ready` on the next sweep.
 
 ---
 
@@ -45,20 +47,29 @@ is what closes it.
 
 Not speed. Six properties, and the project currently fails four of them:
 
-| Property | Now |
+| Property | Now (after step 4) |
 |---|---|
-| Work is decoupled from the request lifecycle | ❌ indexing runs in the API process |
-| Resource use per unit of work is bounded | 🟡 writes are chunked; the LLM stage fans out one coroutine per entity |
-| You can run N copies | ❌ a second API instance doubles indexing load rather than sharing it |
-| Work survives failure | ❌ one exception is terminal; restart strands the job |
-| Cost grows sub-linearly with data | 🟡 `content_hash` exists but nothing consumes it yet |
-| One tenant can't starve the others | ❌ no repo size cap, quota, or rate limit |
+| Work is decoupled from the request lifecycle | ✅ the API enqueues; a separate worker indexes |
+| Resource use per unit of work is bounded | ✅ chunks of 200 through describe → embed → write, LLM concurrency capped per run, worker concurrency capped per process |
+| You can run N copies | ✅ `--scale worker=2`; claiming is an atomic UPDATE, verified as no double processing |
+| Work survives failure | ✅ retries with backoff, terminal after 3 attempts, heartbeat reconciler for dead workers |
+| Cost grows sub-linearly with data | ✅ a re-index describes only changed entities — 1 LLM call instead of 37,695 on a one-function edit to Django |
+| One tenant can't starve the others | 🟡 the queue serialises work now, but there is still no repo size cap, quota, or rate limit — step 6 |
 
 Scale estimate, extrapolated from a measured 56-entity run at ~0.36 s/entity: a
 Django-sized repo (~15,000 entities) would take **~1.5 hours in a single
 process**, holding ~15,000 coroutines and ~15,000 × 1024 floats in memory, with
-no checkpoint. That is arithmetic, not a measurement — worth measuring for real
-once step 3 makes the attempt survivable.
+no checkpoint. That is arithmetic, not a measurement.
+
+Step 3 removed the memory half of it — peak is now 200 entities, not 15,000,
+regardless of repo size — and made the run survivable.
+
+Step 4 then measured the repo itself: **Django is 37,695 entities**, not 15,000,
+so the estimate above was low by 2.5×. It also measured the part of a run that
+*cannot* be skipped — clone, parse 7,000 files, load and stamp every hash —
+at roughly four minutes. Everything above that floor is now paid only for code
+that actually changed. The end-to-end wall clock with real API calls is still
+unmeasured, and needs a repo small enough to pay for.
 
 ---
 
@@ -68,8 +79,8 @@ once step 3 makes the attempt survivable.
 
 **151 tests, all passing.** 35 need no database and run in ~5 s
 (`pytest -m "not db"`); the rest use Postgres and take ~3.5 min, almost entirely
-network latency to Neon. A local Postgres container in step 2 will cut that
-sharply.
+network latency to Neon. Step 2 moved that onto a local container and the full
+suite now runs in 38.6 s.
 
 Isolation works by SAVEPOINT: the session is bound to a connection whose outer
 transaction is always rolled back, and
@@ -114,119 +125,359 @@ behaviour makes a specific test fail.
 
 ---
 
-### Step 2 — Docker Compose + CI
+### Step 2 — Docker Compose + CI ✅ done
 
 **Why second, and why before the worker.** The worker needs a second process,
 and Compose is how you express that. It also dissolves the queue-backend
 decision: if Redis is one line in a compose file, "Redis is annoying to install
 on Windows" stops being an argument.
 
-**Work.**
+**What shipped.**
 
-- `backend/Dockerfile` (slim base, non-root user, no venv inside the image)
-- `frontend/Dockerfile` or leave the frontend to `npm run dev` for now
-- `docker-compose.yml` with `api`, `worker`, `postgres`, and optionally `redis`.
-  A local Postgres container also removes the dependency on Neon for
-  development and stops tests burning free-tier compute.
-- `.env.example` committed, real `.env` still ignored
-- Entrypoint runs `alembic upgrade head` before starting
-- GitHub Actions: lint + `pytest` against a Postgres service container
+- `backend/Dockerfile` — `python:3.11-slim` matching the venv, non-root
+  `appuser`, no venv inside the image, `git` installed because
+  `github_service` shells out to it for every index
+- `backend/docker-entrypoint.sh` — runs `alembic upgrade head`, then execs the
+  command. `RUN_MIGRATIONS=false` opts a second container out, so the step 3
+  worker won't race the API through alembic on startup.
+- `frontend/Dockerfile` — Vite dev server with the source bind-mounted. A
+  static build would bake in an API host, and the API base is still hardcoded
+  in `client.js`; this becomes a two-stage build + nginx once step 6 moves it
+  to a Vite env var.
+- `docker-compose.yml` — `postgres` (healthchecked, published on 5432 so the
+  test suite can reach it from the host), `api`, `frontend`, and `redis`
+  behind a `queue` profile so it is one flag away without prejudging §5
+- `backend/.env.example`, plus a `!backend/.env.example` negation in
+  `.gitignore` — the existing `backend/.env.*` pattern was swallowing it
+- `.gitattributes` forcing LF on `*.sh`: a Windows checkout otherwise gives the
+  entrypoint CRLF endings and the container dies on the shebang with a "no such
+  file or directory" that names a file that plainly exists
+- `backend/ruff.toml` and `.github/workflows/ci.yml` — three jobs: backend
+  (ruff + alembic + pytest against a Postgres service container), frontend
+  (oxlint + build), and a job that builds both images from the compose file
 
-**Verification.** `docker compose up` on a clean checkout reaches a working app.
-CI green on a pull request.
+**Verification (run, not assumed).** `docker compose up --build` on an empty
+volume: migrations applied, `/health` 200, frontend 200, signup → login →
+authenticated `GET /projects/` round-trips through the containerised Postgres.
+`git clone` confirmed working as uid 10001 inside the API container. The redis
+profile starts on demand and stays out of the default `up`.
 
-**Buys.** A reviewer can run it. Right now they can't without reading the README
-carefully and having their own Neon and Pinecone accounts.
+**Measured: the local Postgres is 5.4× faster for tests.** The full 151-test
+suite runs in **38.6 s** against the compose container versus ~3.5 min against
+Neon. Step 1 guessed this would help; it is most of the wall clock, and it also
+stops the suite burning free-tier compute.
+
+**Two judgement calls worth recording.**
+
+- *No `worker` service yet.* The plan listed one, but there is no worker code
+  until step 3, and a service that exits immediately is worse than an absent
+  one. Adding it is ~10 lines against the same image with `RUN_MIGRATIONS=false`
+  and a different command.
+- *The lint gate is narrow on purpose.* A default ruff ruleset flagged 191
+  violations, 136 of them line-length. Gating on that would have meant
+  reflowing ~40 unrelated lines inside the commit that introduces CI, so the
+  selection is `E4,E7,E9,F,I,W` — undefined names, unused imports, import
+  order, whitespace. That left 19 auto-fixable issues, all applied; one was a
+  genuinely unused import in `test_indexing_service`. Formatting is a separate
+  pass. On the frontend, oxlint exits 0 on warnings, so CI pins
+  `--max-warnings 5` as a ratchet against new ones rather than an unfailable
+  step.
+
+**Buys.** A reviewer can run it. Before this they couldn't without reading the
+README carefully and having their own Neon and Pinecone accounts — now only the
+OpenAI and Pinecone keys are still unavoidable, and everything short of
+indexing and search works without them.
 
 ---
 
-### Step 3 — Worker queue (the big one)
+### Step 3 — Worker queue (the big one) ✅ done
 
 **Why.** This is where most of the scalability work lives — not because a queue
 is magic, but because "move the work out of the request, bound it, chunk it,
 make it retryable" are four faces of the same refactor and much cheaper done
 together.
 
-**Open decision: where the queue lives.** See §5.
+**Decision: Redis + ARQ, with job state in Postgres.** §5 is settled. ARQ
+delivers a job id to a worker and bounds how many run at once; that is all it
+does. Everything durable — status, attempts, `run_after`, `last_error`,
+heartbeat, progress — lives in an `indexing_jobs` table.
 
-**Work.**
+That split is what answers the objection §5 raised against Redis. Enqueue and
+the DB commit *can* still diverge, but the divergence is no longer lossy: the
+job row commits in the same transaction as the project row, so if the Redis
+enqueue fails the row still reads `queued` and the reconciler delivers it. The
+API's enqueue is deliberately allowed to fail silently for exactly this reason.
+It also means the atomic DB claim, not Redis, is what guarantees a job runs
+once — which is the property that actually matters and the one Redis alone
+could not provide.
 
-- A `worker` process that consumes jobs; the API only enqueues
-- An `indexing_jobs` record with `status`, `attempts`, `run_after`,
-  `last_error`, and a heartbeat column
-- **Startup reconciler** — jobs claimed but not finished (stale heartbeat) get
-  requeued or failed. This is the specific fix for the stranded-project bug.
-- Retries with exponential backoff and a terminal failure state after N attempts
-- **Stream the pipeline.** Currently `parse → describe all → embed all → write
-  all`. Change to chunks of ~200 entities flowing through describe → embed →
-  write, checkpointing per chunk. This is what kills the 15,000-coroutine
-  problem and makes a large repo resumable rather than all-or-nothing.
-- Bounded worker concurrency, so ten users adding repos queues rather than
-  launching ten simultaneous clones and ~100 in-flight LLM calls
-- Add `POST /projects/{id}/reindex` — needed to exercise retries, and useful
-- Add a `queued` status; the frontend stepper already labels `pending` as
-  "Queued" so the UI copes
+**What shipped.**
 
-**Verification.** Kill the worker mid-index; on restart the job resumes or
-retries and the project reaches `ready`. Kill the API mid-index; indexing
-continues unaffected. Run two workers and confirm no job is processed twice.
+- `app/worker.py`, run as `arq app.worker.WorkerSettings`. The API only writes
+  a job row and hands the id to Redis; `BackgroundTasks` is gone.
+- `indexing_jobs` with `status`, `attempts`, `run_after`, `last_error`,
+  `heartbeat_at`, and `entities_done` / `entities_total` checkpoints
+- `job_service.claim` — one conditional UPDATE. A job is claimable if it is
+  queued and due, or running with a stale heartbeat. Two workers handed the
+  same message: exactly one gets a row.
+- **Attempts increment on claim, not on failure.** A job that kills its worker
+  outright never reports a failure; counting only clean failures would retry it
+  forever.
+- **Reconciler, at startup *and* every 30 s.** Startup alone turned out to be
+  insufficient: restart quickly enough and the dead worker's heartbeat is not
+  yet stale, so the startup pass correctly skips the job — and with no later
+  pass, nothing ever looks at it again. That is the same stranded-job bug in a
+  narrower window, so the sweep repeats.
+- Exponential backoff (30 s, capped at 15 min), terminal failure after 3
+  attempts
+- **The pipeline streams.** `parse → describe all → embed all → write all`
+  became chunks of 200 flowing through describe → embed → write → upsert, each
+  chunk durable in both stores before the next starts, with a checkpoint after.
+  Deletion still runs once at the end — an entity is only "missing" relative to
+  the complete run.
+- **The pipeline raises instead of swallowing.** Classifying a failure as
+  transient or terminal is the worker's job. Swallowing every exception is what
+  made a rate limit indistinguishable from a repo that will never parse.
+- `worker_concurrency` (default 2) bounds simultaneous clones and, through
+  them, in-flight LLM calls
+- `POST /projects/{id}/reindex`, guarded with 409 against double-queueing the
+  most expensive operation in the app
+- `queued` status end to end, including the frontend stepper; legacy `pending`
+  rows normalise to it
+
+**Verification — run against the compose stack, not asserted.** Using
+`github.com/mdn/content`: 260 MB, ~13 s to clone, and zero `.py` files, so the
+pipeline runs its full course with a realistically long job and no paid calls
+at all.
+
+| Roadmap criterion | Result |
+|---|---|
+| Kill the worker mid-index | `SIGKILL` during clone left the project in `cloning` with a running job — the old bug, reproduced. Worker restarted, reconciler requeued it, `attempt=2`, project reached `ready`. |
+| Kill the API mid-index | `docker compose stop api`; health check unreachable (`000`), indexing continued and the project reached `ready`. |
+| Two workers, no double processing | Six jobs, two workers: all six `succeeded` with `attempts=1`, and the intersection of the two workers' claim logs was empty. |
+
+Across the whole session: 9 job rows, 10 total claims. The extra claim is the
+worker that got killed — exactly one retry, exactly where one was expected.
+
+**Tests: 151 → 228.** The new ones cover claim contention, backoff, terminal
+failure, the reconciler's three populations, chunk boundaries, and that an
+earlier chunk survives a later failure. None of them need a running Redis —
+`conftest` makes the client raise, so a missing stub fails loudly.
+
+**Still open at the time.** A retry re-describes from the beginning. Per-chunk
+commits mean completed chunks are already durable, but nothing yet *skips* them
+on the next attempt — that is step 4's `content_hash` diff, which is what makes
+a resumed run cheap rather than merely correct. **Closed by step 4.**
 
 **Buys.** The strongest engineering story available: a measured failure, a
 designed fix, and a verified result.
 
 ---
 
-### Step 4 — Incremental re-indexing
+### Step 4 — Incremental re-indexing ✅ done
 
 **Why after step 3.** Re-indexing is only sensible once it's a queued, retryable
 job. Phase 4 of the migration deliberately laid the groundwork.
 
-**Work.**
+**Decision: diff in Python, not in SQL.** The run loads
+`(file_path, qualname) → (id, content_hash, start_line, end_line)` for the
+project — four narrow columns, deliberately not whole ORM rows, because
+`source_code` is the large one — and sorts the parsed entities against it in
+memory. A SQL-side diff would have meant writing the parse results somewhere
+first, which is the expensive thing we are trying to avoid.
 
-- Store the cloned commit SHA on `projects`
-- On re-index, diff `content_hash` per `(file_path, qualname)`: describe and
-  embed **only** changed or new entities; leave unchanged rows and their vectors
-  alone
-- Delete removed entities and their vectors (already implemented)
-- Optionally a GitHub webhook so pushes trigger a re-index
-- Replace the `NOT IN` list in `entity_service.delete_missing` with a per-run
-  marker column — it's currently bounded by the statement parameter limit, which
-  is fine at hundreds of entities and not at tens of thousands
+**What shipped.**
 
-**Verification.** Re-index with one function changed: exactly one LLM call, one
-embedding, one updated row. Report the cost reduction as a number.
+- `entity_service.diff_entities`, a pure function splitting a parse into three
+  buckets by cost:
+  - **changed** — new, or the source text differs. Full path: describe, embed,
+    write, upsert. The only bucket that costs money.
+  - **moved** — byte-identical source at different line numbers, because
+    something above it changed. One UPDATE, no API call.
+  - **unchanged** — nothing to do but record that the run saw them.
+- **The `moved` bucket is not an optimisation, it is a correctness fix.**
+  `content_hash` covers the source alone, which is what makes a function that
+  merely shifted down a file cheap to handle. But "cheap" cannot mean "ignored":
+  skipping those rows outright would leave `start_line` pointing at whatever now
+  occupies that offset, and the UI and search results both show line numbers.
+  Adding a line at the top of a file would have silently corrupted every entity
+  below it.
+- `entities.last_seen_run`, stamped on every row a run keeps — written,
+  relocated, or skipped. `delete_missing` now tests that marker instead of a
+  `NOT IN` list, so deletion is two bind parameters at any repository size.
+  Closes defect 12.
+- `mark_seen` binds its ids as a single `bigint[]` and matches with
+  `id = ANY(:ids)`. An expanding `IN` list would have reintroduced the same
+  parameter ceiling one layer down. Verified with 70,001 ids in one statement —
+  comfortably past Postgres's 65,535-parameter limit, where the old code broke.
+- `projects.last_indexed_commit`, written from `git rev-parse HEAD` **only after
+  a run completes**, so the column always names a commit fully present in both
+  stores rather than one that was merely attempted. Surfaced in
+  `ProjectResponse` and linked to GitHub on the project page.
+- A resumed run is now cheap, not merely correct. Step 3 left this open: chunks
+  were durable but nothing skipped them on retry. They are unchanged by
+  definition on the next attempt, so the diff skips them for free.
 
-**Buys.** The clearest quantifiable win in the project. "Cut re-index cost by
-~98% by content-hashing entities" is a resume line with a measurement behind it.
+**Verification — measured against a real repository, with the paid calls stubbed
+by counters rather than no-ops.** Django at a shallow clone: **37,695 entities**,
+which is 2.5× the roadmap's earlier 15,000 estimate, mostly because Django
+vendors an enormous test suite.
+
+| Run | LLM calls | Embeddings | Reused |
+|---|---|---|---|
+| First index | 37,695 | 37,695 | 0 |
+| One function edited (`django/utils/text.py::capfirst`) | **1** | **1** | 37,694 |
+| Nothing changed | **0** | **0** | 37,695 |
+
+**A 99.997% reduction in paid calls for a one-function edit, and 100% for a
+no-op re-index.** The roadmap predicted ~98%; the real figure is higher because
+the prediction assumed file-level granularity and the diff is per entity.
+
+**The honest caveat about wall clock.** Those three runs took 275 s, 415 s and
+256 s. That ordering looks wrong until you notice what was stubbed: with the LLM
+and embedding calls instant, the clock is measuring the *fixed* overhead —
+clone, parse 7,000 files, load 37,695 hashes, stamp them — and none of that got
+cheaper. The saving is in calls, not in these timings. What this does establish
+is the floor: a re-index of a 37k-entity repository cannot go below roughly four
+minutes, essentially all of it clone and parse. Extrapolating the step-1
+measurement of ~0.36 s/entity, the stages that *were* stubbed would have taken
+around 3.8 hours on the first run and about a second on the second.
+
+**Tests: 228 → 267.** The diff is covered as a pure function (renames, file
+moves, edits, shifts, first index) and through the pipeline by counting stub
+calls. The retry case has its own test: kill a run mid-chunk, restart, and
+assert it describes one entity rather than all three.
+
+**One implementation note worth recording.** `mark_seen` and `refresh_locations`
+issue Core UPDATEs against `Entity.__table__`, not the mapped class. An
+ORM-enabled UPDATE carrying bound parameters is interpreted as a
+bulk-update-by-primary-key and demands an `id` in every parameter set — which
+neither statement has, since one matches on an array and the other on a
+bindparam. The failure mode is a confusing `InvalidRequestError` about primary
+keys rather than anything resembling the actual problem.
+
+**Deliberately not done: the GitHub webhook.** It was listed as optional and it
+is the one item here that is not really about indexing — it needs a publicly
+reachable URL, signature verification, and a per-project secret to store, which
+is step 6's territory. `/reindex` already exists and is now cheap enough to call
+freely, which was the point.
+
+**Also considered and rejected: skipping the clone via `git ls-remote`.** If
+HEAD matches `last_indexed_commit`, the whole run could be skipped without
+transferring anything — that would attack the four-minute floor above rather
+than the per-call cost. It adds a network round trip and a second definition of
+"up to date" to keep in step with the entity diff, so it belongs in its own
+change, not bolted onto this one.
+
+**Buys.** The clearest quantifiable win in the project: "cut re-index cost by
+99.997% by content-hashing entities" with a real repository and a reproducible
+measurement behind it.
 
 ---
 
-### Step 5 — Retrieval evaluation, then hybrid search
+### Step 5 — Retrieval evaluation, then hybrid search ✅ done
 
-**Why.** There is currently no answer to "how do you know your search is good?"
-That is the question a technical interviewer will ask about a semantic search
-project, and it deserves a number.
+**Why.** There was no answer to "how do you know your search is good?" That is
+the question a technical interviewer will ask about a semantic search project,
+and it deserves a number.
 
-**Work.**
+**The corpus is CodeLens itself** — every git-tracked `.py` file, 495 entities.
+Chosen over Django (already cloned for step 4) because labels have to be
+auditable, and over `backend/app` alone because 126 entities is too easy. The
+split matters: **351 of the 495 are test entities**, and test names deliberately
+echo the implementations they cover. `test_removes_only_entities_the_run_did_not_see`
+sits next to `delete_missing`. Random chance at success@5 is ~1%.
 
-- A golden set of ~50 `query → expected entity` pairs over a repo you know
-- A script that reports **recall@5** and **MRR**
-- Establish the dense-vector-only baseline
-- Then improve it and measure the delta:
-  - **Hybrid search** — Postgres `tsvector` over descriptions and source for the
-    keyword half, Pinecone for the dense half, fused with reciprocal rank
-    fusion. Both stores are already in place; this needs no new infrastructure.
-  - **Metadata filters** — `entity_type` is already stored in Pinecone metadata
-    and never used. Filtering to functions-only is nearly free.
-  - Optionally a cross-encoder reranker over the top ~50
-  - Optionally include the signature and file path in the embedded text, not
-    just the LLM description
+**62 queries, labelled by Claude Opus 5, from source only.** The generated
+descriptions were deliberately not consulted: writing queries against the text
+being retrieved measures paraphrase overlap, not retrieval. Four categories —
+`natural` (51), `keyword` (4), `jargon` (4, vocabulary absent from the source),
+and `trap` (3, vocabulary that appears verbatim in a *wrong* answer). Labels
+name implementations; tests are non-relevant even when they concern the same
+behaviour, on the grounds that a code search should return the function.
 
-**Verification.** The eval script prints before/after numbers for each change.
+This is not a human-labelled golden set and should not be described as one. It
+is machine-labelled by a stronger model than the one in the pipeline, from
+source rather than from the artifact under test, and validated mechanically.
 
-**Buys.** More than any feature. "Improved recall@5 from 0.62 to 0.84 with
-hybrid retrieval and RRF" beats a longer feature list, and it demonstrates the
-habit of measuring.
+**`eval/validate_golden_set.py` earns its place.** It caught three defects in
+the first draft that would each have silently corrupted the numbers: a query
+tagged `jargon` whose every term was in fact in the source (that became the
+`trap` category), an entity anchoring three separate queries and so counting
+triple, and label paths that had to survive both Windows and Linux rooting.
+
+**On the metric name.** The plan said recall@5. With labels that mean "any of
+these is correct" rather than "return all of these", textbook recall punishes a
+query for having two acceptable answers and finding one. The headline is
+therefore **success@5** — did an acceptable answer appear in the top five — with
+strict recall@5 printed beside it so the choice is visible rather than hidden.
+
+**Results.** 495 entities, 62 queries, retrieval depth 30, RRF k=60.
+
+| | dense | keyword | hybrid |
+|---|---|---|---|
+| success@1 | 0.500 | 0.161 | **0.532** |
+| success@5 | 0.758 | 0.194 | **0.790** |
+| success@10 | 0.806 | 0.194 | **0.839** |
+| strict recall@5 | 0.742 | 0.177 | **0.774** |
+| MRR | 0.592 | 0.173 | **0.621** |
+
+**Hybrid is a real but modest win, and the aggregate alone does not show that.**
++3.2 points on 62 queries is two queries — well inside noise, and an average can
+hide six gains against four losses. The per-query breakdown is what settles it:
+**2 gained, 0 lost.** A strict improvement. And the two it gained (q36, q38) are
+exactly the two the keyword half got right on its own, so the gain is traceable
+to the keyword retriever contributing rather than to RRF reshuffling the dense
+ranking. That is why `keyword` is evaluated at all — it is a control, not a
+candidate.
+
+**The keyword half is terrible alone (0.194) and still worth fusing.** It loses
+37 queries the dense half gets, because natural-language queries share little
+vocabulary with code. But it is unshakeable on exact identifiers, which is
+precisely where embeddings are vague.
+
+**What shipped.**
+
+- `eval/` — golden set, validator, corpus indexer, and a harness with pluggable
+  strategies and a head-to-head diff
+- `entities.search_vector`, a `GENERATED ... STORED` tsvector with weights
+  qualname `A` > description `B` > file_path `C` > source `D`, plus a GIN index.
+  Generated rather than application-maintained so it cannot drift; adding the
+  column backfills every existing row, so old projects became keyword-searchable
+  without a re-index.
+- `entity_service.keyword_search` using `websearch_to_tsquery` (accepts whatever
+  a user types; `to_tsquery` raises on a bare sentence) and `ts_rank_cd`
+- `search_service.reciprocal_rank_fusion`, and `search_project` switched over
+- Scores are normalised against the top hit. Raw RRF sits near 1/60, and the UI
+  renders `score` as a percentage bar — a perfect match displaying as "3%" would
+  read as a broken search.
+
+**Tests: 267 → 308.** Fusion arithmetic, keyword scoping, the normalisation, and
+the metrics themselves — if MRR is computed wrongly every number above is wrong,
+so `QueryOutcome` is tested directly against handwritten rankings.
+
+**Cost.** $0.04 to index the corpus once, measured from the real prompts, and
+$0.000015 per eval run. Step 4 is why re-indexing the corpus is free.
+
+**The finding worth more than the hybrid delta: tests outrank implementations.**
+13 of the 15 dense misses have a test entity at rank 1. The LLM's description of
+a test often states the behaviour *more* explicitly than the implementation's
+does, so it embeds closer to a natural-language query. This is the largest
+single lever left, and it is not a retrieval problem — it is a ranking prior.
+
+**But measuring that lever honestly is harder than it looks.** My relevance
+policy declares tests non-relevant, so "deprioritise test files" would be
+optimising directly against my own labelling choice and would show a large,
+partly circular gain. It is defensible as a *product* decision — users searching
+a codebase want the function, not its test — but the eval was built in a way
+that rewards it, and any number from it has to carry that caveat.
+
+**Not done, and why.** The cross-encoder reranker (a new dependency or a new
+paid call, for a corpus where the top-10 already contains the answer 84% of the
+time — the ceiling it could reach is +5 points) and embedding the signature and
+file path alongside the description (cheap, ~$0.001 to re-embed, and the more
+promising of the two — it attacks the same lexical gap the keyword half does,
+from the dense side).
 
 ---
 
@@ -237,7 +488,7 @@ Individually small, collectively the difference between "demo" and "deployed".
 | Item | Detail |
 |---|---|
 | CORS | `main.py` uses `allow_origins=["*"]` with `allow_credentials=True` — an invalid combination browsers reject, and the wrong posture anyway. Read allowed origins from settings. |
-| Error leakage | `indexing_service` stores `repr(e)` and the API returns it. `git clone` stderr can contain the repo URL with embedded credentials. Store detail in logs, return a generic message. |
+| Error leakage | Fixed for indexing in step 3: the detail goes to `indexing_jobs.last_error` and the logs, and the client gets a generic message — `git clone` stderr can contain the repo URL with embedded credentials. The remaining routes still return raw `HTTPException` detail. |
 | Clone URL validation | A user-supplied URL goes straight to `git clone`. It's argv so there's no shell injection, but nothing server-side restricts the scheme or host — `file://` and internal addresses are reachable. The frontend regex is not validation. |
 | Rate limits | None on signup, login, or search. Login is open to credential stuffing; every search is a paid embedding call. |
 | Quotas | No repo size cap and no per-user project limit. One large monorepo is an unbounded bill. |
@@ -267,39 +518,48 @@ steps 1–5 are what earn good interview questions.
 
 Independent of the sequence above, in rough order of how bad they are:
 
-1. Indexing in-process → stranded jobs, no retry *(step 3)*
-2. LLM stage creates one coroutine per entity; nothing bounds memory by repo
-   size *(step 3)*
-3. No tests *(step 1)*
-4. Error messages leak internal detail to the client *(step 6)*
+1. ~~Indexing in-process → stranded jobs, no retry~~ ✅ *(step 3)*
+2. ~~LLM stage creates one coroutine per entity; nothing bounds memory by repo
+   size~~ ✅ *(step 3)*
+3. ~~No tests~~ ✅ *(step 1)*
+4. Error messages leak internal detail to the client *(step 6)* — the indexing
+   path is fixed (the client now gets a generic message and the detail stays in
+   `indexing_jobs.last_error`); the other routes still leak
 5. Clone URL unvalidated server-side *(step 6)*
 6. CORS wildcard with credentials *(step 6)*
 7. No rate limits or quotas *(step 6)*
-8. Re-index re-describes everything *(step 4)*
-9. No way to know if retrieval is any good *(step 5)*
+8. ~~Re-index re-describes everything~~ ✅ *(step 4)*
+9. ~~No way to know if retrieval is any good~~ ✅ *(step 5)* — 62-query golden
+   set, success@5 and MRR, dense baseline 0.758 / 0.592
 10. `print()` logging *(step 6)*
 11. Unpinned dependencies *(step 6)*
-12. `delete_missing` bounded by statement parameter limit *(step 4)*
+12. ~~`delete_missing` bounded by statement parameter limit~~ ✅ *(step 4)* —
+    replaced by the `last_seen_run` marker; verified past 70,000 ids
 
 ---
 
 ## 5. Open decisions
 
-**Where the job queue lives.** Not yet decided; deliberately deferred until
-after step 2, when both options are equally runnable.
+**Where the job queue lives.** ✅ Decided in step 3: **Redis + ARQ for delivery,
+Postgres for job state.**
 
 | Option | For | Against |
 |---|---|---|
 | **Postgres `SKIP LOCKED`** | No new infrastructure. Enqueue commits in the same transaction as the project row, so the two can never disagree. Job history is just SQL. | Worker polls the database. Less conventional than naming Celery. |
-| **Redis + ARQ** | Purpose-built, less code, instant pickup. Async-native, so it fits the existing `asyncio` code. The answer interviewers expect. | Another service. Enqueue and DB commit can diverge. Upstash's free tier (~10k commands/day) does not survive ARQ's default 0.5 s poll. |
+| **Redis + ARQ** ✅ | Purpose-built, less code, instant pickup. Async-native, so it fits the existing `asyncio` code. The answer interviewers expect. | Another service. Enqueue and DB commit can diverge. Upstash's free tier (~10k commands/day) does not survive ARQ's default 0.5 s poll. |
 | **Redis + Celery** | Most conventional. | Poor async support; heavier than this project needs. ARQ is the better fit if Redis wins. |
 
-Current lean: **Postgres `SKIP LOCKED`**, because transactional enqueue removes
-a whole class of drift and there is already exactly one durable store. "I
-evaluated Redis and chose Postgres `SKIP LOCKED` because I already had a
-transactional store and didn't want two sources of truth" is a stronger
-interview answer than naming the default — but this is a judgement call, not a
-fact.
+The "enqueue and DB commit can diverge" objection turned out to be answerable
+rather than disqualifying, and answering it produced a better design than
+either option alone. The job row commits with the project row, so divergence
+means at worst an undelivered job — which the reconciler repairs — never a lost
+one. And because claiming is an atomic Postgres UPDATE rather than a Redis pop,
+the at-most-once guarantee survives duplicate delivery, a Redis flush, or two
+workers racing.
+
+The honest framing: this is a hybrid, and the hybrid exists because Redis on
+its own could not be trusted with the durable record. Pure `SKIP LOCKED` would
+have been less machinery for the same guarantees, at the cost of polling.
 
 ---
 

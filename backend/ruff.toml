@@ -1,0 +1,28 @@
+# Lint configuration for CI.
+#
+# The rule set is deliberately narrow. Its job is to catch things that are
+# actually wrong — undefined names, unused imports, shadowed bindings — not to
+# impose a house style on code that predates it. E501 (line length) in
+# particular is off: turning it on would mean reflowing ~40 unrelated lines,
+# which belongs in a formatting pass, not in the commit that adds CI.
+
+target-version = "py311"
+extend-exclude = [
+    "cr_venv",
+    # Alembic owns env.py and generates the version files; its import ordering
+    # and line lengths are not ours to police.
+    "alembic",
+]
+
+[lint]
+select = [
+    "E4",  # imports (shadowing, multiple on one line)
+    "E7",  # statement-level mistakes (comparisons to None/True, bare lambdas)
+    "E9",  # syntax and IO errors
+    "F",   # pyflakes: undefined names, unused imports and variables
+    "I",   # import sorting
+    "W",   # trailing whitespace, missing final newline
+]
+
+[lint.isort]
+known-first-party = ["app"]

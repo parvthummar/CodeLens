@@ -11,7 +11,11 @@ from app.models.user import User
 
 
 class ProjectStatus(str, Enum):
+    # Created but not yet handed to the queue. Only reachable now if the API
+    # dies between the INSERT and the enqueue; kept because rows predating the
+    # worker still carry it, and the reconciler treats it as queued.
     PENDING = "pending"
+    QUEUED = "queued"
     CLONING = "cloning"
     INDEXING = "indexing"
     READY = "ready"
@@ -63,6 +67,11 @@ class Project(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         server_default=ProjectStatus.PENDING.value,
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # HEAD of the last run that completed. Written only on success, so it is a
+    # statement about what is actually in the two stores, not about what was
+    # attempted. 40 chars for a hex sha1; unset until the first run finishes.
+    last_indexed_commit: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
     def __repr__(self) -> str:
         return f"<Project {self.github_owner}/{self.github_repo_name} {self.status}>"

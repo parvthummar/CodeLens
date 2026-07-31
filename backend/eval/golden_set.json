@@ -1,0 +1,417 @@
+{
+  "corpus": "CodeLens itself — every git-tracked .py file (495 entities: 126 implementation, 351 test, 12 alembic, 6 scripts)",
+  "labelled_by": "Claude Opus 5",
+  "method": "Labelled from source code only. The descriptions the pipeline generates were deliberately not consulted: writing queries against the text being retrieved would measure paraphrase overlap, not retrieval.",
+  "relevance_policy": "Expected entities name implementations. Test entities are treated as non-relevant even when they concern the same behaviour — a code search should return the function, not its test. This makes the corpus adversarial on purpose: 351 of 495 entities are tests whose names echo the implementations.",
+  "categories": {
+    "natural": "A sentence describing intent, the way someone would type it into the box.",
+    "keyword": "Terse fragments, closer to what people actually type than to prose.",
+    "jargon": "Domain vocabulary that does not appear in the source. Dense retrieval should win here; a keyword-only system cannot match on a word that is absent.",
+    "trap": "The query's vocabulary appears verbatim in a *wrong* answer. Keyword scoring should be actively misled; this is where hybrid fusion can lose ground rather than gain it."
+  },
+  "matching": "expected entries are `path::qualname`. Paths are matched by suffix and separator-normalised, so a corpus rooted at the repo root or at backend/ both resolve.",
+  "queries": [
+    {
+      "id": 1,
+      "query": "hash a user's password before saving it to the database",
+      "category": "natural",
+      "expected": ["backend/app/core/security.py::hash_password"]
+    },
+    {
+      "id": 2,
+      "query": "check whether a plaintext password matches the stored hash",
+      "category": "natural",
+      "expected": ["backend/app/core/security.py::verify_password"]
+    },
+    {
+      "id": 3,
+      "query": "issue a signed token when someone logs in",
+      "category": "natural",
+      "expected": ["backend/app/core/security.py::create_access_token"]
+    },
+    {
+      "id": 4,
+      "query": "read the current user from the request's authorization header",
+      "category": "natural",
+      "expected": ["backend/app/core/deps.py::get_current_user"]
+    },
+    {
+      "id": 5,
+      "query": "decode jwt",
+      "category": "keyword",
+      "expected": ["backend/app/core/security.py::decode_access_token"]
+    },
+    {
+      "id": 6,
+      "query": "salted one-way digest of a secret",
+      "category": "jargon",
+      "expected": ["backend/app/core/security.py::hash_password"],
+      "note": "Neither 'salted' nor 'digest' appears in the source."
+    },
+    {
+      "id": 7,
+      "query": "look up an account by email address",
+      "category": "natural",
+      "expected": ["backend/app/services/auth_service.py::get_user_by_email"]
+    },
+    {
+      "id": 8,
+      "query": "register a new user account",
+      "category": "natural",
+      "expected": [
+        "backend/app/services/auth_service.py::signup",
+        "backend/app/api/v1/auth.py::signup"
+      ],
+      "note": "Route and service are both defensible answers; forcing one would make MRR noise."
+    },
+    {
+      "id": 9,
+      "query": "authenticate an email and password and hand back a token",
+      "category": "natural",
+      "expected": [
+        "backend/app/services/auth_service.py::login",
+        "backend/app/api/v1/auth.py::login"
+      ]
+    },
+    {
+      "id": 10,
+      "query": "build the async database engine from a connection url",
+      "category": "natural",
+      "expected": [
+        "backend/app/db/postgres.py::build_engine_from_url",
+        "backend/app/db/postgres.py::_build_engine"
+      ]
+    },
+    {
+      "id": 11,
+      "query": "work out whether the database host is behind a connection pooler",
+      "category": "natural",
+      "expected": ["backend/app/db/postgres.py::is_pooled_host"]
+    },
+    {
+      "id": 12,
+      "query": "strip connection string parameters the driver will reject",
+      "category": "natural",
+      "expected": ["backend/app/db/postgres.py::normalize_dsn"]
+    },
+    {
+      "id": 13,
+      "query": "open a short-lived database session for a background job",
+      "category": "natural",
+      "expected": ["backend/app/db/postgres.py::session_scope"]
+    },
+    {
+      "id": 14,
+      "query": "dependency that gives each request its own database session",
+      "category": "natural",
+      "expected": ["backend/app/db/postgres.py::get_db"]
+    },
+    {
+      "id": 15,
+      "query": "close every database connection when the app shuts down",
+      "category": "natural",
+      "expected": ["backend/app/db/postgres.py::dispose_engine"]
+    },
+    {
+      "id": 16,
+      "query": "prepared statement name collision",
+      "category": "keyword",
+      "expected": ["backend/app/db/postgres.py::_unique_statement_name"]
+    },
+    {
+      "id": 17,
+      "query": "walk a directory and pull out every function and class in the python files",
+      "category": "natural",
+      "expected": ["backend/app/services/parser_service.py::parse_codebase"]
+    },
+    {
+      "id": 18,
+      "query": "build a readable signature string for a function",
+      "category": "natural",
+      "expected": ["backend/app/services/parser_service.py::_build_func_signature"]
+    },
+    {
+      "id": 19,
+      "query": "build a signature for a class including its base classes",
+      "category": "natural",
+      "expected": ["backend/app/services/parser_service.py::_build_class_signature"]
+    },
+    {
+      "id": 20,
+      "query": "fingerprint a chunk of source so we can tell if it changed",
+      "category": "natural",
+      "expected": [
+        "backend/app/services/parser_service.py::CodeEntity.__post_init__",
+        "backend/app/services/parser_service.py::CodeEntity"
+      ]
+    },
+    {
+      "id": 21,
+      "query": "collapse duplicate definitions that share a name",
+      "category": "natural",
+      "expected": ["backend/app/services/entity_service.py::dedupe"]
+    },
+    {
+      "id": 22,
+      "query": "insert rows or update them when they already exist",
+      "category": "natural",
+      "expected": ["backend/app/services/entity_service.py::upsert_entities"]
+    },
+    {
+      "id": 23,
+      "query": "work out which entities changed since the last index",
+      "category": "natural",
+      "expected": ["backend/app/services/entity_service.py::diff_entities"]
+    },
+    {
+      "id": 24,
+      "query": "delete entities that are no longer present in the repository",
+      "category": "natural",
+      "expected": ["backend/app/services/entity_service.py::delete_missing"]
+    },
+    {
+      "id": 25,
+      "query": "correct the line numbers of code that moved but did not change",
+      "category": "natural",
+      "expected": ["backend/app/services/entity_service.py::refresh_locations"]
+    },
+    {
+      "id": 26,
+      "query": "stamp rows as having been seen by the current run",
+      "category": "natural",
+      "expected": ["backend/app/services/entity_service.py::mark_seen"]
+    },
+    {
+      "id": 27,
+      "query": "read back the stored hashes and identities for a project",
+      "category": "natural",
+      "expected": ["backend/app/services/entity_service.py::load_stored"]
+    },
+    {
+      "id": 28,
+      "query": "hydrate entity records by id without leaking across projects",
+      "category": "natural",
+      "expected": ["backend/app/services/entity_service.py::get_by_ids"]
+    },
+    {
+      "id": 29,
+      "query": "idempotent bulk write with conflict resolution",
+      "category": "jargon",
+      "expected": ["backend/app/services/entity_service.py::upsert_entities"],
+      "note": "'idempotent' appears nowhere in the source."
+    },
+    {
+      "id": 30,
+      "query": "run the whole indexing pipeline for one repository",
+      "category": "natural",
+      "expected": ["backend/app/services/indexing_service.py::run_indexing_pipeline"]
+    },
+    {
+      "id": 31,
+      "query": "split a list into fixed-size batches",
+      "category": "natural",
+      "expected": ["backend/app/services/indexing_service.py::_chunks"]
+    },
+    {
+      "id": 32,
+      "query": "move a project between pipeline states like cloning and ready",
+      "category": "natural",
+      "expected": ["backend/app/services/indexing_service.py::set_project_status"]
+    },
+    {
+      "id": 33,
+      "query": "remember which commit the index reflects",
+      "category": "natural",
+      "expected": ["backend/app/services/indexing_service.py::_record_commit"]
+    },
+    {
+      "id": 34,
+      "query": "atomically take ownership of a queued job",
+      "category": "natural",
+      "expected": ["backend/app/services/job_service.py::claim"]
+    },
+    {
+      "id": 35,
+      "query": "at-most-once execution guarantee under concurrency",
+      "category": "jargon",
+      "expected": ["backend/app/services/job_service.py::claim"],
+      "note": "The property the function provides, in words the source never uses."
+    },
+    {
+      "id": 36,
+      "query": "how long to wait before retrying a failed job",
+      "category": "natural",
+      "expected": ["backend/app/services/job_service.py::backoff_delay"]
+    },
+    {
+      "id": 37,
+      "query": "recover work abandoned by a worker that died",
+      "category": "natural",
+      "expected": ["backend/app/services/job_service.py::reconcile"]
+    },
+    {
+      "id": 38,
+      "query": "report that a job is still being worked on",
+      "category": "natural",
+      "expected": ["backend/app/services/job_service.py::heartbeat"]
+    },
+    {
+      "id": 39,
+      "query": "stop the same project being queued for indexing twice",
+      "category": "natural",
+      "expected": ["backend/app/services/job_service.py::has_active_job"]
+    },
+    {
+      "id": 40,
+      "query": "record a failure and decide whether there is another attempt left",
+      "category": "natural",
+      "expected": ["backend/app/services/job_service.py::mark_failed"]
+    },
+    {
+      "id": 41,
+      "query": "checkpoint how far through a long job we have got",
+      "category": "natural",
+      "expected": ["backend/app/services/job_service.py::record_progress"]
+    },
+    {
+      "id": 42,
+      "query": "shallow clone a git repository into a temporary directory",
+      "category": "natural",
+      "expected": ["backend/app/services/github_service.py::clone_repo"]
+    },
+    {
+      "id": 43,
+      "query": "which commit is checked out",
+      "category": "keyword",
+      "expected": ["backend/app/services/github_service.py::head_commit"]
+    },
+    {
+      "id": 44,
+      "query": "throw away the temporary checkout when we are finished",
+      "category": "natural",
+      "expected": ["backend/app/services/github_service.py::cleanup_repo"]
+    },
+    {
+      "id": 45,
+      "query": "ask a language model to describe what a piece of code does",
+      "category": "natural",
+      "expected": ["backend/app/services/llm_service.py::generate_description"]
+    },
+    {
+      "id": 46,
+      "query": "cap how many model requests are in flight at once",
+      "category": "natural",
+      "expected": ["backend/app/services/llm_service.py::generate_descriptions_batch"]
+    },
+    {
+      "id": 47,
+      "query": "turn a list of texts into vectors, batched",
+      "category": "natural",
+      "expected": ["backend/app/services/embedding_service.py::embed_texts"]
+    },
+    {
+      "id": 48,
+      "query": "approximate nearest neighbour lookup",
+      "category": "jargon",
+      "expected": ["backend/app/services/pinecone_service.py::query_vectors"],
+      "note": "Describes what Pinecone does; the phrase is absent from the source."
+    },
+    {
+      "id": 49,
+      "query": "throw away every vector belonging to a project",
+      "category": "natural",
+      "expected": ["backend/app/services/pinecone_service.py::delete_namespace"]
+    },
+    {
+      "id": 50,
+      "query": "search a codebase in plain english and rank the results",
+      "category": "natural",
+      "expected": ["backend/app/services/search_service.py::search_project"]
+    },
+    {
+      "id": 51,
+      "query": "pull the owner and repo name out of a github url",
+      "category": "natural",
+      "expected": ["backend/app/services/project_service.py::parse_github_url"]
+    },
+    {
+      "id": 52,
+      "query": "create a project and queue its first index",
+      "category": "natural",
+      "expected": ["backend/app/services/project_service.py::create_project"],
+      "note": "The route of the same name is a near-duplicate distractor and is deliberately not accepted: it delegates, it does not create."
+    },
+    {
+      "id": 53,
+      "query": "queue another indexing run for a project that already exists",
+      "category": "natural",
+      "expected": [
+        "backend/app/services/project_service.py::request_reindex",
+        "backend/app/api/v1/projects.py::reindex_project"
+      ]
+    },
+    {
+      "id": 54,
+      "query": "loop that periodically reports the worker is alive",
+      "category": "natural",
+      "expected": ["backend/app/worker.py::_heartbeat_loop"]
+    },
+    {
+      "id": 55,
+      "query": "the worker entry point that executes one indexing job",
+      "category": "natural",
+      "expected": ["backend/app/worker.py::index_project"]
+    },
+    {
+      "id": 56,
+      "query": "periodic sweep that rescues stranded work",
+      "category": "natural",
+      "expected": [
+        "backend/app/worker.py::reconcile_tick",
+        "backend/app/worker.py::run_reconciler"
+      ]
+    },
+    {
+      "id": 57,
+      "query": "graceful shutdown, release the redis pool and the db engine",
+      "category": "natural",
+      "expected": ["backend/app/worker.py::shutdown"]
+    },
+    {
+      "id": 58,
+      "query": "liveness probe endpoint",
+      "category": "trap",
+      "expected": ["backend/app/main.py::health_check"],
+      "note": "Caught by the validator: 'liveness' appears verbatim in _heartbeat_loop's docstring, and 'endpoint' throughout db/postgres.py. A reader means the HTTP health route; lexical scoring is pulled toward the worker's heartbeat loop."
+    },
+    {
+      "id": 59,
+      "query": "application settings read from environment variables",
+      "category": "natural",
+      "expected": ["backend/app/config.py::Settings"]
+    },
+    {
+      "id": 60,
+      "query": "fan out work with bounded concurrency using a semaphore",
+      "category": "keyword",
+      "expected": [
+        "backend/app/services/llm_service.py::generate_descriptions_batch",
+        "backend/app/services/llm_service.py::_process_entity"
+      ]
+    },
+    {
+      "id": 61,
+      "query": "parse codebase skipping pycache and node_modules",
+      "category": "trap",
+      "expected": ["backend/app/services/parser_service.py::parse_codebase"],
+      "note": "test_parser_service.py names those directories far more often than the implementation, which lists them once in a set literal. Term frequency points at the tests."
+    },
+    {
+      "id": 62,
+      "query": "reconcile stale running jobs",
+      "category": "trap",
+      "expected": ["backend/app/services/job_service.py::reconcile"],
+      "note": "The reconciler's tests name 'stale', 'running' and 'reconcile' repeatedly; the implementation says each once."
+    }
+  ]
+}

@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from app.api.v1.router import v1_router
 from app.db.postgres import dispose_engine, get_engine
+from app.services import queue_service
 
 
 @asynccontextmanager
@@ -15,7 +16,22 @@ async def lifespan(app: FastAPI):
     async with get_engine().connect() as conn:
         await conn.execute(text("SELECT 1"))
     print("[OK] Postgres reachable")
+
+    # Redis is checked but not required to start. Enqueue failures are already
+    # recoverable — the job row is the record and the worker reconciles it — so
+    # refusing to serve login and search because the queue is down would be a
+    # worse outage than the one being reported.
+    try:
+        pool = await queue_service.get_pool()
+        await pool.ping()
+        print("[OK] Redis reachable")
+    except Exception as e:
+        print(f"[WARN] Redis unreachable ({e!r}); new indexing jobs will wait "
+              "for the worker's reconciler")
+
     yield
+
+    await queue_service.close_pool()
     await dispose_engine()
     print("[STOP] Postgres connection pool closed")
 

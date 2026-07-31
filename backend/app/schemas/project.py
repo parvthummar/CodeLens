@@ -25,5 +25,7 @@ class ProjectResponse(BaseModel):
     github_repo_name: str
     status: ProjectStatus
     error_message: Optional[str] = None
+    # The commit the last successful run indexed. None until one completes.
+    last_indexed_commit: Optional[str] = None
     created_at: datetime
     updated_at: datetime

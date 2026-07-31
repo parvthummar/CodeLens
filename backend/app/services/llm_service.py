@@ -1,5 +1,7 @@
 import asyncio
+
 from openai import AsyncOpenAI
+
 from app.config import settings
 
 _client: AsyncOpenAI | None = None
