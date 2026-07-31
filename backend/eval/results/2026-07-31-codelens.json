@@ -1,0 +1,1360 @@
+{
+  "recorded_at": "2026-07-31T12:51:40+00:00",
+  "corpus": {
+    "project_id": "b7a9e480-7680-4bc9-8227-8e5719d0b7d6",
+    "entities": 495,
+    "indexed_commit": "cea2b61b0ec553683e88229fc988f65dd980fdde",
+    "test_entities": 351
+  },
+  "config": {
+    "retrieve_k": 10,
+    "candidate_depth": 30,
+    "rrf_k": 60,
+    "llm_model": "gpt-4o-mini",
+    "embedding_model": "text-embedding-3-small",
+    "embedding_dimensions": 1024
+  },
+  "golden_set": {
+    "queries": 62,
+    "labelled_by": "Claude Opus 5"
+  },
+  "summaries": [
+    {
+      "strategy": "dense",
+      "queries": 62,
+      "success@1": 0.5,
+      "success@5": 0.7580645161290323,
+      "success@10": 0.8064516129032258,
+      "strict_recall@5": 0.7419354838709677,
+      "mrr": 0.5918010752688173
+    },
+    {
+      "strategy": "keyword",
+      "queries": 62,
+      "success@1": 0.16129032258064516,
+      "success@5": 0.1935483870967742,
+      "success@10": 0.1935483870967742,
+      "strict_recall@5": 0.1774193548387097,
+      "mrr": 0.17338709677419356
+    },
+    {
+      "strategy": "hybrid",
+      "queries": 62,
+      "success@1": 0.532258064516129,
+      "success@5": 0.7903225806451613,
+      "success@10": 0.8387096774193549,
+      "strict_recall@5": 0.7741935483870968,
+      "mrr": 0.6219086021505376
+    }
+  ],
+  "per_query": {
+    "dense": [
+      {
+        "id": 1,
+        "query": "hash a user's password before saving it to the database",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/core/security.py::hash_password"
+      },
+      {
+        "id": 2,
+        "query": "check whether a plaintext password matches the stored hash",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/core/security.py::verify_password"
+      },
+      {
+        "id": 3,
+        "query": "issue a signed token when someone logs in",
+        "category": "natural",
+        "first_hit_rank": 8,
+        "top1": "backend/app/services/auth_service.py::login"
+      },
+      {
+        "id": 4,
+        "query": "read the current user from the request's authorization header",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/core/deps.py::get_current_user"
+      },
+      {
+        "id": 5,
+        "query": "decode jwt",
+        "category": "keyword",
+        "first_hit_rank": 3,
+        "top1": "backend/tests/test_security.py::TestAccessTokens.test_token_signed_with_another_secret_is_rejected"
+      },
+      {
+        "id": 6,
+        "query": "salted one-way digest of a secret",
+        "category": "jargon",
+        "first_hit_rank": 5,
+        "top1": "backend/scripts/check_db.py::redact"
+      },
+      {
+        "id": 7,
+        "query": "look up an account by email address",
+        "category": "natural",
+        "first_hit_rank": 2,
+        "top1": "backend/tests/test_auth_api.py::TestLogin.test_unknown_email_is_unauthorized"
+      },
+      {
+        "id": 8,
+        "query": "register a new user account",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/auth_service.py::signup"
+      },
+      {
+        "id": 9,
+        "query": "authenticate an email and password and hand back a token",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/auth_service.py::login"
+      },
+      {
+        "id": 10,
+        "query": "build the async database engine from a connection url",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/db/postgres.py::build_engine_from_url"
+      },
+      {
+        "id": 11,
+        "query": "work out whether the database host is behind a connection pooler",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/db/postgres.py::is_pooled_host"
+      },
+      {
+        "id": 12,
+        "query": "strip connection string parameters the driver will reject",
+        "category": "natural",
+        "first_hit_rank": 2,
+        "top1": "backend/scripts/check_db.py::test_normalization"
+      },
+      {
+        "id": 13,
+        "query": "open a short-lived database session for a background job",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/db/postgres.py::session_scope"
+      },
+      {
+        "id": 14,
+        "query": "dependency that gives each request its own database session",
+        "category": "natural",
+        "first_hit_rank": 4,
+        "top1": "backend/app/db/postgres.py::session_scope"
+      },
+      {
+        "id": 15,
+        "query": "close every database connection when the app shuts down",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/db/postgres.py::dispose_engine"
+      },
+      {
+        "id": 16,
+        "query": "prepared statement name collision",
+        "category": "keyword",
+        "first_hit_rank": 1,
+        "top1": "backend/app/db/postgres.py::_unique_statement_name"
+      },
+      {
+        "id": 17,
+        "query": "walk a directory and pull out every function and class in the python files",
+        "category": "natural",
+        "first_hit_rank": 3,
+        "top1": "backend/tests/test_parser_service.py::TestExtraction.test_multiple_files"
+      },
+      {
+        "id": 18,
+        "query": "build a readable signature string for a function",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/parser_service.py::_build_func_signature"
+      },
+      {
+        "id": 19,
+        "query": "build a signature for a class including its base classes",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/parser_service.py::_build_class_signature"
+      },
+      {
+        "id": 20,
+        "query": "fingerprint a chunk of source so we can tell if it changed",
+        "category": "natural",
+        "first_hit_rank": 8,
+        "top1": "backend/tests/test_parser_service.py::TestContentHash.test_changed_source_changes_hash"
+      },
+      {
+        "id": 21,
+        "query": "collapse duplicate definitions that share a name",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/entity_service.py::dedupe"
+      },
+      {
+        "id": 22,
+        "query": "insert rows or update them when they already exist",
+        "category": "natural",
+        "first_hit_rank": 2,
+        "top1": "backend/app/services/entity_service.py::build_rows"
+      },
+      {
+        "id": 23,
+        "query": "work out which entities changed since the last index",
+        "category": "natural",
+        "first_hit_rank": 5,
+        "top1": "backend/app/services/entity_service.py::EntityDiff"
+      },
+      {
+        "id": 24,
+        "query": "delete entities that are no longer present in the repository",
+        "category": "natural",
+        "first_hit_rank": 4,
+        "top1": "backend/tests/test_entity_service.py::TestDeleteMissing.test_a_run_that_saw_nothing_deletes_everything"
+      },
+      {
+        "id": 25,
+        "query": "correct the line numbers of code that moved but did not change",
+        "category": "natural",
+        "first_hit_rank": 4,
+        "top1": "backend/tests/test_indexing_service.py::TestIncrementalReindex.test_a_shifted_function_is_relocated_not_redescribed"
+      },
+      {
+        "id": 26,
+        "query": "stamp rows as having been seen by the current run",
+        "category": "natural",
+        "first_hit_rank": 3,
+        "top1": "backend/tests/test_entity_service.py::TestBuildRows.test_stamps_every_row_with_the_project"
+      },
+      {
+        "id": 27,
+        "query": "read back the stored hashes and identities for a project",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/entity_service.py::load_stored"
+      },
+      {
+        "id": 28,
+        "query": "hydrate entity records by id without leaking across projects",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_entity_service.py::TestUpsert.test_projects_do_not_collide"
+      },
+      {
+        "id": 29,
+        "query": "idempotent bulk write with conflict resolution",
+        "category": "jargon",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/entity_service.py::upsert_entities"
+      },
+      {
+        "id": 30,
+        "query": "run the whole indexing pipeline for one repository",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/indexing_service.py::run_indexing_pipeline"
+      },
+      {
+        "id": 31,
+        "query": "split a list into fixed-size batches",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/indexing_service.py::_chunks"
+      },
+      {
+        "id": 32,
+        "query": "move a project between pipeline states like cloning and ready",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_indexing_service.py::TestHappyPath.test_moves_through_every_status"
+      },
+      {
+        "id": 33,
+        "query": "remember which commit the index reflects",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/indexing_service.py::_record_commit"
+      },
+      {
+        "id": 34,
+        "query": "atomically take ownership of a queued job",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/job_service.py::claim"
+      },
+      {
+        "id": 35,
+        "query": "at-most-once execution guarantee under concurrency",
+        "category": "jargon",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_job_service.py::TestClaim.test_a_second_worker_gets_nothing"
+      },
+      {
+        "id": 36,
+        "query": "how long to wait before retrying a failed job",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_job_service.py::TestReconcile.test_gives_up_on_a_job_with_no_attempts_left"
+      },
+      {
+        "id": 37,
+        "query": "recover work abandoned by a worker that died",
+        "category": "natural",
+        "first_hit_rank": 8,
+        "top1": "backend/tests/test_job_service.py::TestReconcile.test_records_why_it_was_abandoned"
+      },
+      {
+        "id": 38,
+        "query": "report that a job is still being worked on",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_job_service.py::TestHeartbeat.test_keeps_a_long_run_out_of_the_reconciler"
+      },
+      {
+        "id": 39,
+        "query": "stop the same project being queued for indexing twice",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_worker.py::TestDuplicateDelivery.test_a_second_delivery_does_nothing"
+      },
+      {
+        "id": 40,
+        "query": "record a failure and decide whether there is another attempt left",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/job_service.py::mark_failed"
+      },
+      {
+        "id": 41,
+        "query": "checkpoint how far through a long job we have got",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_job_service.py::TestReconcile.test_gives_up_on_a_job_with_no_attempts_left"
+      },
+      {
+        "id": 42,
+        "query": "shallow clone a git repository into a temporary directory",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/github_service.py::clone_repo"
+      },
+      {
+        "id": 43,
+        "query": "which commit is checked out",
+        "category": "keyword",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/github_service.py::head_commit"
+      },
+      {
+        "id": 44,
+        "query": "throw away the temporary checkout when we are finished",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_indexing_service.py::TestFailures.test_temp_directory_is_cleaned_up_after_failure"
+      },
+      {
+        "id": 45,
+        "query": "ask a language model to describe what a piece of code does",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/llm_service.py::generate_description"
+      },
+      {
+        "id": 46,
+        "query": "cap how many model requests are in flight at once",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_worker.py::TestRetry.test_the_project_stays_queued_while_retries_remain"
+      },
+      {
+        "id": 47,
+        "query": "turn a list of texts into vectors, batched",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/embedding_service.py::embed_texts"
+      },
+      {
+        "id": 48,
+        "query": "approximate nearest neighbour lookup",
+        "category": "jargon",
+        "first_hit_rank": 3,
+        "top1": "backend/tests/test_indexing_service.py::TestDedupe.test_last_definition_is_the_one_stored"
+      },
+      {
+        "id": 49,
+        "query": "throw away every vector belonging to a project",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/app/services/pinecone_service.py::delete_vectors"
+      },
+      {
+        "id": 50,
+        "query": "search a codebase in plain english and rank the results",
+        "category": "natural",
+        "first_hit_rank": 4,
+        "top1": "backend/app/services/parser_service.py::parse_codebase"
+      },
+      {
+        "id": 51,
+        "query": "pull the owner and repo name out of a github url",
+        "category": "natural",
+        "first_hit_rank": 2,
+        "top1": "backend/tests/test_projects_api.py::TestCreate.test_parses_owner_and_repo_from_the_url"
+      },
+      {
+        "id": 52,
+        "query": "create a project and queue its first index",
+        "category": "natural",
+        "first_hit_rank": 3,
+        "top1": "backend/app/services/job_service.py::create_job"
+      },
+      {
+        "id": 53,
+        "query": "queue another indexing run for a project that already exists",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/project_service.py::request_reindex"
+      },
+      {
+        "id": 54,
+        "query": "loop that periodically reports the worker is alive",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/worker.py::_heartbeat_loop"
+      },
+      {
+        "id": 55,
+        "query": "the worker entry point that executes one indexing job",
+        "category": "natural",
+        "first_hit_rank": 4,
+        "top1": "backend/app/models/indexing_job.py::IndexingJob"
+      },
+      {
+        "id": 56,
+        "query": "periodic sweep that rescues stranded work",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_worker.py::TestStartupReconciler.test_the_periodic_sweep_catches_a_fast_restart"
+      },
+      {
+        "id": 57,
+        "query": "graceful shutdown, release the redis pool and the db engine",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/worker.py::shutdown"
+      },
+      {
+        "id": 58,
+        "query": "liveness probe endpoint",
+        "category": "trap",
+        "first_hit_rank": 1,
+        "top1": "backend/app/main.py::health_check"
+      },
+      {
+        "id": 59,
+        "query": "application settings read from environment variables",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/config.py::Settings"
+      },
+      {
+        "id": 60,
+        "query": "fan out work with bounded concurrency using a semaphore",
+        "category": "keyword",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_job_service.py::TestClaim.test_a_second_worker_gets_nothing"
+      },
+      {
+        "id": 61,
+        "query": "parse codebase skipping pycache and node_modules",
+        "category": "trap",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/parser_service.py::parse_codebase"
+      },
+      {
+        "id": 62,
+        "query": "reconcile stale running jobs",
+        "category": "trap",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/job_service.py::reconcile"
+      }
+    ],
+    "keyword": [
+      {
+        "id": 1,
+        "query": "hash a user's password before saving it to the database",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/conftest.py::other_user"
+      },
+      {
+        "id": 2,
+        "query": "check whether a plaintext password matches the stored hash",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 3,
+        "query": "issue a signed token when someone logs in",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 4,
+        "query": "read the current user from the request's authorization header",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 5,
+        "query": "decode jwt",
+        "category": "keyword",
+        "first_hit_rank": 1,
+        "top1": "backend/app/core/security.py::decode_access_token"
+      },
+      {
+        "id": 6,
+        "query": "salted one-way digest of a secret",
+        "category": "jargon",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 7,
+        "query": "look up an account by email address",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 8,
+        "query": "register a new user account",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 9,
+        "query": "authenticate an email and password and hand back a token",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 10,
+        "query": "build the async database engine from a connection url",
+        "category": "natural",
+        "first_hit_rank": 2,
+        "top1": "backend/scripts/check_db.py::exercise_endpoint"
+      },
+      {
+        "id": 11,
+        "query": "work out whether the database host is behind a connection pooler",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 12,
+        "query": "strip connection string parameters the driver will reject",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 13,
+        "query": "open a short-lived database session for a background job",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/db/postgres.py::session_scope"
+      },
+      {
+        "id": 14,
+        "query": "dependency that gives each request its own database session",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 15,
+        "query": "close every database connection when the app shuts down",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 16,
+        "query": "prepared statement name collision",
+        "category": "keyword",
+        "first_hit_rank": null,
+        "top1": "backend/app/db/postgres.py::build_engine_from_url"
+      },
+      {
+        "id": 17,
+        "query": "walk a directory and pull out every function and class in the python files",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 18,
+        "query": "build a readable signature string for a function",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 19,
+        "query": "build a signature for a class including its base classes",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 20,
+        "query": "fingerprint a chunk of source so we can tell if it changed",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 21,
+        "query": "collapse duplicate definitions that share a name",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/entity_service.py::dedupe"
+      },
+      {
+        "id": 22,
+        "query": "insert rows or update them when they already exist",
+        "category": "natural",
+        "first_hit_rank": 4,
+        "top1": "backend/app/services/entity_service.py::build_rows"
+      },
+      {
+        "id": 23,
+        "query": "work out which entities changed since the last index",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 24,
+        "query": "delete entities that are no longer present in the repository",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 25,
+        "query": "correct the line numbers of code that moved but did not change",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/entity_service.py::refresh_locations"
+      },
+      {
+        "id": 26,
+        "query": "stamp rows as having been seen by the current run",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_entity_service.py::TestDeleteMissing.test_an_upsert_stamps_the_run_it_was_written_by"
+      },
+      {
+        "id": 27,
+        "query": "read back the stored hashes and identities for a project",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 28,
+        "query": "hydrate entity records by id without leaking across projects",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 29,
+        "query": "idempotent bulk write with conflict resolution",
+        "category": "jargon",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 30,
+        "query": "run the whole indexing pipeline for one repository",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 31,
+        "query": "split a list into fixed-size batches",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 32,
+        "query": "move a project between pipeline states like cloning and ready",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 33,
+        "query": "remember which commit the index reflects",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 34,
+        "query": "atomically take ownership of a queued job",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 35,
+        "query": "at-most-once execution guarantee under concurrency",
+        "category": "jargon",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 36,
+        "query": "how long to wait before retrying a failed job",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/job_service.py::backoff_delay"
+      },
+      {
+        "id": 37,
+        "query": "recover work abandoned by a worker that died",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 38,
+        "query": "report that a job is still being worked on",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/job_service.py::heartbeat"
+      },
+      {
+        "id": 39,
+        "query": "stop the same project being queued for indexing twice",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 40,
+        "query": "record a failure and decide whether there is another attempt left",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 41,
+        "query": "checkpoint how far through a long job we have got",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 42,
+        "query": "shallow clone a git repository into a temporary directory",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 43,
+        "query": "which commit is checked out",
+        "category": "keyword",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_indexing_service.py::TestCommitSha.test_reported_in_the_result"
+      },
+      {
+        "id": 44,
+        "query": "throw away the temporary checkout when we are finished",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 45,
+        "query": "ask a language model to describe what a piece of code does",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 46,
+        "query": "cap how many model requests are in flight at once",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 47,
+        "query": "turn a list of texts into vectors, batched",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_indexing_service.py::TestIncrementalReindex"
+      },
+      {
+        "id": 48,
+        "query": "approximate nearest neighbour lookup",
+        "category": "jargon",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 49,
+        "query": "throw away every vector belonging to a project",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 50,
+        "query": "search a codebase in plain english and rank the results",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 51,
+        "query": "pull the owner and repo name out of a github url",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 52,
+        "query": "create a project and queue its first index",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/project_service.py::create_project"
+      },
+      {
+        "id": 53,
+        "query": "queue another indexing run for a project that already exists",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/api/v1/projects.py::reindex_project"
+      },
+      {
+        "id": 54,
+        "query": "loop that periodically reports the worker is alive",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 55,
+        "query": "the worker entry point that executes one indexing job",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 56,
+        "query": "periodic sweep that rescues stranded work",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 57,
+        "query": "graceful shutdown, release the redis pool and the db engine",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 58,
+        "query": "liveness probe endpoint",
+        "category": "trap",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 59,
+        "query": "application settings read from environment variables",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 60,
+        "query": "fan out work with bounded concurrency using a semaphore",
+        "category": "keyword",
+        "first_hit_rank": null,
+        "top1": null
+      },
+      {
+        "id": 61,
+        "query": "parse codebase skipping pycache and node_modules",
+        "category": "trap",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/parser_service.py::parse_codebase"
+      },
+      {
+        "id": 62,
+        "query": "reconcile stale running jobs",
+        "category": "trap",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/job_service.py::reconcile"
+      }
+    ],
+    "hybrid": [
+      {
+        "id": 1,
+        "query": "hash a user's password before saving it to the database",
+        "category": "natural",
+        "first_hit_rank": 3,
+        "top1": "backend/tests/conftest.py::user"
+      },
+      {
+        "id": 2,
+        "query": "check whether a plaintext password matches the stored hash",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/core/security.py::verify_password"
+      },
+      {
+        "id": 3,
+        "query": "issue a signed token when someone logs in",
+        "category": "natural",
+        "first_hit_rank": 8,
+        "top1": "backend/app/services/auth_service.py::login"
+      },
+      {
+        "id": 4,
+        "query": "read the current user from the request's authorization header",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/core/deps.py::get_current_user"
+      },
+      {
+        "id": 5,
+        "query": "decode jwt",
+        "category": "keyword",
+        "first_hit_rank": 1,
+        "top1": "backend/app/core/security.py::decode_access_token"
+      },
+      {
+        "id": 6,
+        "query": "salted one-way digest of a secret",
+        "category": "jargon",
+        "first_hit_rank": 5,
+        "top1": "backend/scripts/check_db.py::redact"
+      },
+      {
+        "id": 7,
+        "query": "look up an account by email address",
+        "category": "natural",
+        "first_hit_rank": 2,
+        "top1": "backend/tests/test_auth_api.py::TestLogin.test_unknown_email_is_unauthorized"
+      },
+      {
+        "id": 8,
+        "query": "register a new user account",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/auth_service.py::signup"
+      },
+      {
+        "id": 9,
+        "query": "authenticate an email and password and hand back a token",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/auth_service.py::login"
+      },
+      {
+        "id": 10,
+        "query": "build the async database engine from a connection url",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/db/postgres.py::build_engine_from_url"
+      },
+      {
+        "id": 11,
+        "query": "work out whether the database host is behind a connection pooler",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/db/postgres.py::is_pooled_host"
+      },
+      {
+        "id": 12,
+        "query": "strip connection string parameters the driver will reject",
+        "category": "natural",
+        "first_hit_rank": 2,
+        "top1": "backend/scripts/check_db.py::test_normalization"
+      },
+      {
+        "id": 13,
+        "query": "open a short-lived database session for a background job",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/db/postgres.py::session_scope"
+      },
+      {
+        "id": 14,
+        "query": "dependency that gives each request its own database session",
+        "category": "natural",
+        "first_hit_rank": 4,
+        "top1": "backend/app/db/postgres.py::session_scope"
+      },
+      {
+        "id": 15,
+        "query": "close every database connection when the app shuts down",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/db/postgres.py::dispose_engine"
+      },
+      {
+        "id": 16,
+        "query": "prepared statement name collision",
+        "category": "keyword",
+        "first_hit_rank": 1,
+        "top1": "backend/app/db/postgres.py::_unique_statement_name"
+      },
+      {
+        "id": 17,
+        "query": "walk a directory and pull out every function and class in the python files",
+        "category": "natural",
+        "first_hit_rank": 3,
+        "top1": "backend/tests/test_parser_service.py::TestExtraction.test_multiple_files"
+      },
+      {
+        "id": 18,
+        "query": "build a readable signature string for a function",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/parser_service.py::_build_func_signature"
+      },
+      {
+        "id": 19,
+        "query": "build a signature for a class including its base classes",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/parser_service.py::_build_class_signature"
+      },
+      {
+        "id": 20,
+        "query": "fingerprint a chunk of source so we can tell if it changed",
+        "category": "natural",
+        "first_hit_rank": 8,
+        "top1": "backend/tests/test_parser_service.py::TestContentHash.test_changed_source_changes_hash"
+      },
+      {
+        "id": 21,
+        "query": "collapse duplicate definitions that share a name",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/entity_service.py::dedupe"
+      },
+      {
+        "id": 22,
+        "query": "insert rows or update them when they already exist",
+        "category": "natural",
+        "first_hit_rank": 3,
+        "top1": "backend/app/services/entity_service.py::build_rows"
+      },
+      {
+        "id": 23,
+        "query": "work out which entities changed since the last index",
+        "category": "natural",
+        "first_hit_rank": 5,
+        "top1": "backend/app/services/entity_service.py::EntityDiff"
+      },
+      {
+        "id": 24,
+        "query": "delete entities that are no longer present in the repository",
+        "category": "natural",
+        "first_hit_rank": 4,
+        "top1": "backend/tests/test_entity_service.py::TestDeleteMissing.test_a_run_that_saw_nothing_deletes_everything"
+      },
+      {
+        "id": 25,
+        "query": "correct the line numbers of code that moved but did not change",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/entity_service.py::refresh_locations"
+      },
+      {
+        "id": 26,
+        "query": "stamp rows as having been seen by the current run",
+        "category": "natural",
+        "first_hit_rank": 4,
+        "top1": "backend/tests/test_entity_service.py::TestDeleteMissing.test_an_upsert_stamps_the_run_it_was_written_by"
+      },
+      {
+        "id": 27,
+        "query": "read back the stored hashes and identities for a project",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/entity_service.py::load_stored"
+      },
+      {
+        "id": 28,
+        "query": "hydrate entity records by id without leaking across projects",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_entity_service.py::TestUpsert.test_projects_do_not_collide"
+      },
+      {
+        "id": 29,
+        "query": "idempotent bulk write with conflict resolution",
+        "category": "jargon",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/entity_service.py::upsert_entities"
+      },
+      {
+        "id": 30,
+        "query": "run the whole indexing pipeline for one repository",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/indexing_service.py::run_indexing_pipeline"
+      },
+      {
+        "id": 31,
+        "query": "split a list into fixed-size batches",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/indexing_service.py::_chunks"
+      },
+      {
+        "id": 32,
+        "query": "move a project between pipeline states like cloning and ready",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_indexing_service.py::TestHappyPath.test_moves_through_every_status"
+      },
+      {
+        "id": 33,
+        "query": "remember which commit the index reflects",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/indexing_service.py::_record_commit"
+      },
+      {
+        "id": 34,
+        "query": "atomically take ownership of a queued job",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/job_service.py::claim"
+      },
+      {
+        "id": 35,
+        "query": "at-most-once execution guarantee under concurrency",
+        "category": "jargon",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_job_service.py::TestClaim.test_a_second_worker_gets_nothing"
+      },
+      {
+        "id": 36,
+        "query": "how long to wait before retrying a failed job",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/job_service.py::backoff_delay"
+      },
+      {
+        "id": 37,
+        "query": "recover work abandoned by a worker that died",
+        "category": "natural",
+        "first_hit_rank": 8,
+        "top1": "backend/tests/test_job_service.py::TestReconcile.test_records_why_it_was_abandoned"
+      },
+      {
+        "id": 38,
+        "query": "report that a job is still being worked on",
+        "category": "natural",
+        "first_hit_rank": 2,
+        "top1": "backend/app/services/job_service.py::reconcile"
+      },
+      {
+        "id": 39,
+        "query": "stop the same project being queued for indexing twice",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_worker.py::TestDuplicateDelivery.test_a_second_delivery_does_nothing"
+      },
+      {
+        "id": 40,
+        "query": "record a failure and decide whether there is another attempt left",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/job_service.py::mark_failed"
+      },
+      {
+        "id": 41,
+        "query": "checkpoint how far through a long job we have got",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_job_service.py::TestReconcile.test_gives_up_on_a_job_with_no_attempts_left"
+      },
+      {
+        "id": 42,
+        "query": "shallow clone a git repository into a temporary directory",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/github_service.py::clone_repo"
+      },
+      {
+        "id": 43,
+        "query": "which commit is checked out",
+        "category": "keyword",
+        "first_hit_rank": 5,
+        "top1": "backend/tests/test_indexing_service.py::TestCommitSha"
+      },
+      {
+        "id": 44,
+        "query": "throw away the temporary checkout when we are finished",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_indexing_service.py::TestFailures.test_temp_directory_is_cleaned_up_after_failure"
+      },
+      {
+        "id": 45,
+        "query": "ask a language model to describe what a piece of code does",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/llm_service.py::generate_description"
+      },
+      {
+        "id": 46,
+        "query": "cap how many model requests are in flight at once",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_worker.py::TestRetry.test_the_project_stays_queued_while_retries_remain"
+      },
+      {
+        "id": 47,
+        "query": "turn a list of texts into vectors, batched",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/embedding_service.py::embed_texts"
+      },
+      {
+        "id": 48,
+        "query": "approximate nearest neighbour lookup",
+        "category": "jargon",
+        "first_hit_rank": 3,
+        "top1": "backend/tests/test_indexing_service.py::TestDedupe.test_last_definition_is_the_one_stored"
+      },
+      {
+        "id": 49,
+        "query": "throw away every vector belonging to a project",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/app/services/pinecone_service.py::delete_vectors"
+      },
+      {
+        "id": 50,
+        "query": "search a codebase in plain english and rank the results",
+        "category": "natural",
+        "first_hit_rank": 4,
+        "top1": "backend/app/services/parser_service.py::parse_codebase"
+      },
+      {
+        "id": 51,
+        "query": "pull the owner and repo name out of a github url",
+        "category": "natural",
+        "first_hit_rank": 2,
+        "top1": "backend/tests/test_projects_api.py::TestCreate.test_parses_owner_and_repo_from_the_url"
+      },
+      {
+        "id": 52,
+        "query": "create a project and queue its first index",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/project_service.py::create_project"
+      },
+      {
+        "id": 53,
+        "query": "queue another indexing run for a project that already exists",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/api/v1/projects.py::reindex_project"
+      },
+      {
+        "id": 54,
+        "query": "loop that periodically reports the worker is alive",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/worker.py::_heartbeat_loop"
+      },
+      {
+        "id": 55,
+        "query": "the worker entry point that executes one indexing job",
+        "category": "natural",
+        "first_hit_rank": 4,
+        "top1": "backend/app/models/indexing_job.py::IndexingJob"
+      },
+      {
+        "id": 56,
+        "query": "periodic sweep that rescues stranded work",
+        "category": "natural",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_worker.py::TestStartupReconciler.test_the_periodic_sweep_catches_a_fast_restart"
+      },
+      {
+        "id": 57,
+        "query": "graceful shutdown, release the redis pool and the db engine",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/worker.py::shutdown"
+      },
+      {
+        "id": 58,
+        "query": "liveness probe endpoint",
+        "category": "trap",
+        "first_hit_rank": 1,
+        "top1": "backend/app/main.py::health_check"
+      },
+      {
+        "id": 59,
+        "query": "application settings read from environment variables",
+        "category": "natural",
+        "first_hit_rank": 1,
+        "top1": "backend/app/config.py::Settings"
+      },
+      {
+        "id": 60,
+        "query": "fan out work with bounded concurrency using a semaphore",
+        "category": "keyword",
+        "first_hit_rank": null,
+        "top1": "backend/tests/test_job_service.py::TestClaim.test_a_second_worker_gets_nothing"
+      },
+      {
+        "id": 61,
+        "query": "parse codebase skipping pycache and node_modules",
+        "category": "trap",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/parser_service.py::parse_codebase"
+      },
+      {
+        "id": 62,
+        "query": "reconcile stale running jobs",
+        "category": "trap",
+        "first_hit_rank": 1,
+        "top1": "backend/app/services/job_service.py::reconcile"
+      }
+    ]
+  }
+}

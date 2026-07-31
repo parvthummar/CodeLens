@@ -41,6 +41,8 @@ def pipeline(db, monkeypatch):
         "deleted_vectors": [],
         "statuses": [],
         "dest_dirs": [],
+        # Mutable so a test can simulate the repo moving to a new commit.
+        "head": ["a" * 40],
     }
     files = {"m.py": SOURCE}
 
@@ -57,6 +59,9 @@ def pipeline(db, monkeypatch):
             path = Path(dest) / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(body, encoding="utf-8")
+
+    async def _head_commit(dest):
+        return calls["head"][-1]
 
     async def _describe(entities, batch_size=10):
         calls["described"].append([e.name for e in entities])
@@ -80,6 +85,7 @@ def pipeline(db, monkeypatch):
 
     monkeypatch.setattr(indexing_service, "session_scope", _scope)
     monkeypatch.setattr(github_service, "clone_repo", _clone)
+    monkeypatch.setattr(github_service, "head_commit", _head_commit)
     monkeypatch.setattr(llm_service, "generate_descriptions_batch", _describe)
     monkeypatch.setattr(embedding_service, "embed_texts", _embed)
     monkeypatch.setattr(pinecone_service, "upsert_vectors", _upsert)
@@ -97,6 +103,15 @@ async def status_of(db, project_id) -> tuple[str, str | None]:
         )
     ).one()
     return row[0], row[1]
+
+
+async def commit_of(db, project_id) -> str | None:
+    return (
+        await db.execute(
+            text("SELECT last_indexed_commit FROM projects WHERE id = :i"),
+            {"i": project_id},
+        )
+    ).scalar_one()
 
 
 class TestHappyPath:
@@ -247,6 +262,267 @@ class TestReindex:
         await indexing_service.run_indexing_pipeline(str(project.id))
         await indexing_service.run_indexing_pipeline(str(project.id))
         assert pipeline["deleted_vectors"] == []
+
+
+class TestIncrementalReindex:
+    """Only genuinely changed entities reach the LLM and the embedding model.
+
+    `content_hash` has been stored since the migration; this is what consumes
+    it. The assertions are call counts rather than timings because the cost
+    being saved is per-call, and a stub makes it exactly countable.
+    """
+
+    async def described_names(self, pipeline) -> list[str]:
+        return [name for batch in pipeline["described"] for name in batch]
+
+    async def test_an_unchanged_reindex_makes_no_paid_calls(self, db, project, pipeline):
+        """The headline: re-indexing a repo that has not moved costs nothing."""
+        await indexing_service.run_indexing_pipeline(str(project.id))
+        pipeline["described"].clear()
+        pipeline["embedded"].clear()
+        pipeline["upserted"].clear()
+
+        await indexing_service.run_indexing_pipeline(str(project.id))
+
+        assert pipeline["described"] == []
+        assert pipeline["embedded"] == []
+        assert pipeline["upserted"] == []
+
+    async def test_an_unchanged_reindex_still_reaches_ready(self, db, project, pipeline):
+        await indexing_service.run_indexing_pipeline(str(project.id))
+        await indexing_service.run_indexing_pipeline(str(project.id))
+
+        status, error = await status_of(db, project.id)
+        assert status == "ready"
+        assert error is None
+        assert await entity_service.count_for_project(db, project.id) == EXPECTED_ENTITIES
+
+    async def test_one_edited_function_costs_exactly_one_of_everything(
+        self, db, project, pipeline
+    ):
+        """The roadmap's verification criterion, as an assertion."""
+        await indexing_service.run_indexing_pipeline(str(project.id))
+        pipeline["described"].clear()
+        pipeline["embedded"].clear()
+        pipeline["upserted"].clear()
+
+        # alpha's body changes; Thing and Thing.go are untouched.
+        pipeline["files"]["m.py"] = SOURCE.replace("return 1", "return 999")
+        await indexing_service.run_indexing_pipeline(str(project.id))
+
+        assert await self.described_names(pipeline) == ["alpha"]
+        assert pipeline["embedded"] == [["description of alpha"]]
+        assert [len(vectors) for _, vectors in pipeline["upserted"]] == [1]
+
+    async def test_the_edit_lands_in_postgres(self, db, project, pipeline):
+        await indexing_service.run_indexing_pipeline(str(project.id))
+        pipeline["files"]["m.py"] = SOURCE.replace("return 1", "return 999")
+        await indexing_service.run_indexing_pipeline(str(project.id))
+
+        source = (
+            await db.execute(
+                text("SELECT source_code FROM entities WHERE project_id = :p AND qualname = 'alpha'"),
+                {"p": project.id},
+            )
+        ).scalar_one()
+        assert "return 999" in source
+
+    async def test_skipped_entities_keep_their_identity_and_description(
+        self, db, project, pipeline
+    ):
+        """Reuse must not mean "left behind" — the rows have to stay intact."""
+        await indexing_service.run_indexing_pipeline(str(project.id))
+        before = dict(
+            (
+                await db.execute(
+                    text("SELECT qualname, id FROM entities WHERE project_id = :p"),
+                    {"p": project.id},
+                )
+            ).all()
+        )
+
+        pipeline["files"]["m.py"] = SOURCE.replace("return 1", "return 999")
+        await indexing_service.run_indexing_pipeline(str(project.id))
+
+        after = dict(
+            (
+                await db.execute(
+                    text("SELECT qualname, description FROM entities WHERE project_id = :p"),
+                    {"p": project.id},
+                )
+            ).all()
+        )
+        ids_after = dict(
+            (
+                await db.execute(
+                    text("SELECT qualname, id FROM entities WHERE project_id = :p"),
+                    {"p": project.id},
+                )
+            ).all()
+        )
+        assert ids_after == before
+        assert after["Thing.go"] == "description of Thing.go"
+
+    async def test_a_new_function_is_the_only_one_described(self, db, project, pipeline):
+        await indexing_service.run_indexing_pipeline(str(project.id))
+        pipeline["described"].clear()
+
+        pipeline["files"]["m.py"] = SOURCE + "\n\ndef beta():\n    return 2\n"
+        await indexing_service.run_indexing_pipeline(str(project.id))
+
+        assert await self.described_names(pipeline) == ["beta"]
+        assert await entity_service.count_for_project(db, project.id) == EXPECTED_ENTITIES + 1
+
+    async def test_a_shifted_function_is_relocated_not_redescribed(
+        self, db, project, pipeline
+    ):
+        """Identical source at new line numbers: fix the location, pay nothing.
+
+        content_hash covers the source alone, so this bucket exists precisely
+        because hashing the location too would have turned every insertion at
+        the top of a file into a full re-index of that file.
+        """
+        await indexing_service.run_indexing_pipeline(str(project.id))
+        pipeline["described"].clear()
+        pipeline["embedded"].clear()
+
+        # Three comment lines above everything: same code, all of it moved.
+        pipeline["files"]["m.py"] = "# a\n# b\n# c\n" + SOURCE
+        await indexing_service.run_indexing_pipeline(str(project.id))
+
+        assert pipeline["described"] == []
+        assert pipeline["embedded"] == []
+
+        start = (
+            await db.execute(
+                text("SELECT start_line FROM entities WHERE project_id = :p AND qualname = 'alpha'"),
+                {"p": project.id},
+            )
+        ).scalar_one()
+        assert start == 4
+
+    async def test_a_rename_describes_the_new_name_and_drops_the_old(
+        self, db, project, pipeline
+    ):
+        await indexing_service.run_indexing_pipeline(str(project.id))
+        pipeline["described"].clear()
+
+        pipeline["files"]["m.py"] = SOURCE.replace("def alpha", "def renamed")
+        await indexing_service.run_indexing_pipeline(str(project.id))
+
+        assert await self.described_names(pipeline) == ["renamed"]
+        names = (
+            await db.execute(
+                text("SELECT qualname FROM entities WHERE project_id = :p"), {"p": project.id}
+            )
+        ).scalars().all()
+        assert "alpha" not in names
+        assert "renamed" in names
+
+    async def test_reports_the_saving(self, db, project, pipeline):
+        first = await indexing_service.run_indexing_pipeline(str(project.id))
+        assert first.entities_described == EXPECTED_ENTITIES
+        assert first.entities_reused == 0
+        assert first.reuse_ratio == 0.0
+
+        pipeline["files"]["m.py"] = SOURCE.replace("return 1", "return 999")
+        second = await indexing_service.run_indexing_pipeline(str(project.id))
+        assert second.entities_described == 1
+        assert second.entities_reused == 2
+        assert second.entities_indexed == EXPECTED_ENTITIES
+        assert round(second.reuse_ratio, 3) == round(2 / 3, 3)
+
+    async def test_progress_starts_from_what_was_reused(self, db, project, pipeline):
+        """A re-index that skips most of the repo should not look like a restart."""
+        await indexing_service.run_indexing_pipeline(str(project.id))
+
+        seen = []
+
+        async def _on_progress(done, total):
+            seen.append((done, total))
+
+        pipeline["files"]["m.py"] = SOURCE.replace("return 1", "return 999")
+        await indexing_service.run_indexing_pipeline(
+            str(project.id), on_progress=_on_progress
+        )
+        assert seen == [(2, 3), (3, 3)]
+
+    async def test_a_retry_does_not_redescribe_the_chunk_that_landed(
+        self, db, project, pipeline, monkeypatch
+    ):
+        """Step 3 left this open: per-chunk commits were durable but not reused.
+
+        The first attempt writes chunk one and dies on chunk two. The retry has
+        to describe only what is still missing.
+        """
+        monkeypatch.setattr(indexing_service.settings, "indexing_chunk_size", 2)
+
+        real_embed = embedding_service.embed_texts
+        state = {"calls": 0}
+
+        async def _fail_on_second(texts):
+            state["calls"] += 1
+            if state["calls"] == 2:
+                raise RuntimeError("embedding service down")
+            return await real_embed(texts)
+
+        monkeypatch.setattr(embedding_service, "embed_texts", _fail_on_second)
+        with pytest.raises(RuntimeError):
+            await indexing_service.run_indexing_pipeline(str(project.id))
+
+        assert await entity_service.count_for_project(db, project.id) == 2
+        monkeypatch.setattr(embedding_service, "embed_texts", real_embed)
+        pipeline["described"].clear()
+
+        await indexing_service.run_indexing_pipeline(str(project.id))
+
+        # One entity left, not all three.
+        assert len(await self.described_names(pipeline)) == 1
+        assert await entity_service.count_for_project(db, project.id) == EXPECTED_ENTITIES
+        assert (await status_of(db, project.id))[0] == "ready"
+
+
+class TestCommitSha:
+    async def test_stored_after_a_successful_run(self, db, project, pipeline):
+        await indexing_service.run_indexing_pipeline(str(project.id))
+        assert await commit_of(db, project.id) == "a" * 40
+
+    async def test_reported_in_the_result(self, db, project, pipeline):
+        result = await indexing_service.run_indexing_pipeline(str(project.id))
+        assert result.commit_sha == "a" * 40
+
+    async def test_updated_when_the_repo_moves_on(self, db, project, pipeline):
+        await indexing_service.run_indexing_pipeline(str(project.id))
+        pipeline["head"].append("b" * 40)
+        pipeline["files"]["m.py"] = SOURCE.replace("return 1", "return 999")
+
+        await indexing_service.run_indexing_pipeline(str(project.id))
+        assert await commit_of(db, project.id) == "b" * 40
+
+    async def test_not_advanced_by_a_failed_run(self, db, project, pipeline, monkeypatch):
+        """The column names a commit that is fully present in both stores."""
+        await indexing_service.run_indexing_pipeline(str(project.id))
+
+        async def _boom(namespace, vectors):
+            raise RuntimeError("pinecone unavailable")
+
+        pipeline["head"].append("b" * 40)
+        pipeline["files"]["m.py"] = SOURCE.replace("return 1", "return 999")
+        monkeypatch.setattr(pinecone_service, "upsert_vectors", _boom)
+
+        with pytest.raises(RuntimeError):
+            await indexing_service.run_indexing_pipeline(str(project.id))
+        assert await commit_of(db, project.id) == "a" * 40
+
+    async def test_an_unresolvable_head_is_not_fatal(self, db, project, pipeline, monkeypatch):
+        async def _no_head(dest):
+            return None
+
+        monkeypatch.setattr(github_service, "head_commit", _no_head)
+        await indexing_service.run_indexing_pipeline(str(project.id))
+
+        assert (await status_of(db, project.id))[0] == "ready"
+        assert await commit_of(db, project.id) is None
 
 
 class TestFailures:

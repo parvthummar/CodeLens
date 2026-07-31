@@ -122,13 +122,21 @@ class TestClaim:
 
 
 class TestHeartbeat:
-    async def test_moves_the_timestamp_forward(self, db, project):
+    async def test_moves_the_timestamp_forward(self, db, project, monkeypatch):
         job = await make_job(db, project)
         claimed = await job_service.claim(db, job.id)
         before = claimed.heartbeat_at
 
+        # The clock is pinned rather than trusted. claim() and heartbeat() both
+        # stamp _now(), and against a local Postgres the two round trips can
+        # complete inside one tick of a coarse system clock — which made a
+        # strict `>` fail intermittently. The behaviour under test is that
+        # heartbeat writes the current time, not that Postgres is slow.
+        later = before + timedelta(seconds=30)
+        monkeypatch.setattr(job_service, "_now", lambda: later)
+
         await job_service.heartbeat(db, job.id)
-        assert (await reload(db, job)).heartbeat_at > before
+        assert (await reload(db, job)).heartbeat_at == later
 
     async def test_keeps_a_long_run_out_of_the_reconciler(self, db, project):
         job = await make_job(db, project)

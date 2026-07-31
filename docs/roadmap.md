@@ -47,13 +47,13 @@ back to `ready` on the next sweep.
 
 Not speed. Six properties, and the project currently fails four of them:
 
-| Property | Now (after step 3) |
+| Property | Now (after step 4) |
 |---|---|
 | Work is decoupled from the request lifecycle | ✅ the API enqueues; a separate worker indexes |
 | Resource use per unit of work is bounded | ✅ chunks of 200 through describe → embed → write, LLM concurrency capped per run, worker concurrency capped per process |
 | You can run N copies | ✅ `--scale worker=2`; claiming is an atomic UPDATE, verified as no double processing |
 | Work survives failure | ✅ retries with backoff, terminal after 3 attempts, heartbeat reconciler for dead workers |
-| Cost grows sub-linearly with data | 🟡 `content_hash` exists but nothing consumes it yet — step 4 |
+| Cost grows sub-linearly with data | ✅ a re-index describes only changed entities — 1 LLM call instead of 37,695 on a one-function edit to Django |
 | One tenant can't starve the others | 🟡 the queue serialises work now, but there is still no repo size cap, quota, or rate limit — step 6 |
 
 Scale estimate, extrapolated from a measured 56-entity run at ~0.36 s/entity: a
@@ -62,8 +62,14 @@ process**, holding ~15,000 coroutines and ~15,000 × 1024 floats in memory, with
 no checkpoint. That is arithmetic, not a measurement.
 
 Step 3 removed the memory half of it — peak is now 200 entities, not 15,000,
-regardless of repo size — and made the run survivable, so the wall clock is
-finally worth measuring for real. Still to do.
+regardless of repo size — and made the run survivable.
+
+Step 4 then measured the repo itself: **Django is 37,695 entities**, not 15,000,
+so the estimate above was low by 2.5×. It also measured the part of a run that
+*cannot* be skipped — clone, parse 7,000 files, load and stamp every hash —
+at roughly four minutes. Everything above that floor is now paid only for code
+that actually changed. The end-to-end wall clock with real API calls is still
+unmeasured, and needs a repo small enough to pay for.
 
 ---
 
@@ -258,67 +264,220 @@ failure, the reconciler's three populations, chunk boundaries, and that an
 earlier chunk survives a later failure. None of them need a running Redis —
 `conftest` makes the client raise, so a missing stub fails loudly.
 
-**Still open.** A retry re-describes from the beginning. Per-chunk commits mean
-completed chunks are already durable, but nothing yet *skips* them on the next
-attempt — that is step 4's `content_hash` diff, which is what makes a resumed
-run cheap rather than merely correct.
+**Still open at the time.** A retry re-describes from the beginning. Per-chunk
+commits mean completed chunks are already durable, but nothing yet *skips* them
+on the next attempt — that is step 4's `content_hash` diff, which is what makes
+a resumed run cheap rather than merely correct. **Closed by step 4.**
 
 **Buys.** The strongest engineering story available: a measured failure, a
 designed fix, and a verified result.
 
 ---
 
-### Step 4 — Incremental re-indexing
+### Step 4 — Incremental re-indexing ✅ done
 
 **Why after step 3.** Re-indexing is only sensible once it's a queued, retryable
 job. Phase 4 of the migration deliberately laid the groundwork.
 
-**Work.**
+**Decision: diff in Python, not in SQL.** The run loads
+`(file_path, qualname) → (id, content_hash, start_line, end_line)` for the
+project — four narrow columns, deliberately not whole ORM rows, because
+`source_code` is the large one — and sorts the parsed entities against it in
+memory. A SQL-side diff would have meant writing the parse results somewhere
+first, which is the expensive thing we are trying to avoid.
 
-- Store the cloned commit SHA on `projects`
-- On re-index, diff `content_hash` per `(file_path, qualname)`: describe and
-  embed **only** changed or new entities; leave unchanged rows and their vectors
-  alone
-- Delete removed entities and their vectors (already implemented)
-- Optionally a GitHub webhook so pushes trigger a re-index
-- Replace the `NOT IN` list in `entity_service.delete_missing` with a per-run
-  marker column — it's currently bounded by the statement parameter limit, which
-  is fine at hundreds of entities and not at tens of thousands
+**What shipped.**
 
-**Verification.** Re-index with one function changed: exactly one LLM call, one
-embedding, one updated row. Report the cost reduction as a number.
+- `entity_service.diff_entities`, a pure function splitting a parse into three
+  buckets by cost:
+  - **changed** — new, or the source text differs. Full path: describe, embed,
+    write, upsert. The only bucket that costs money.
+  - **moved** — byte-identical source at different line numbers, because
+    something above it changed. One UPDATE, no API call.
+  - **unchanged** — nothing to do but record that the run saw them.
+- **The `moved` bucket is not an optimisation, it is a correctness fix.**
+  `content_hash` covers the source alone, which is what makes a function that
+  merely shifted down a file cheap to handle. But "cheap" cannot mean "ignored":
+  skipping those rows outright would leave `start_line` pointing at whatever now
+  occupies that offset, and the UI and search results both show line numbers.
+  Adding a line at the top of a file would have silently corrupted every entity
+  below it.
+- `entities.last_seen_run`, stamped on every row a run keeps — written,
+  relocated, or skipped. `delete_missing` now tests that marker instead of a
+  `NOT IN` list, so deletion is two bind parameters at any repository size.
+  Closes defect 12.
+- `mark_seen` binds its ids as a single `bigint[]` and matches with
+  `id = ANY(:ids)`. An expanding `IN` list would have reintroduced the same
+  parameter ceiling one layer down. Verified with 70,001 ids in one statement —
+  comfortably past Postgres's 65,535-parameter limit, where the old code broke.
+- `projects.last_indexed_commit`, written from `git rev-parse HEAD` **only after
+  a run completes**, so the column always names a commit fully present in both
+  stores rather than one that was merely attempted. Surfaced in
+  `ProjectResponse` and linked to GitHub on the project page.
+- A resumed run is now cheap, not merely correct. Step 3 left this open: chunks
+  were durable but nothing skipped them on retry. They are unchanged by
+  definition on the next attempt, so the diff skips them for free.
 
-**Buys.** The clearest quantifiable win in the project. "Cut re-index cost by
-~98% by content-hashing entities" is a resume line with a measurement behind it.
+**Verification — measured against a real repository, with the paid calls stubbed
+by counters rather than no-ops.** Django at a shallow clone: **37,695 entities**,
+which is 2.5× the roadmap's earlier 15,000 estimate, mostly because Django
+vendors an enormous test suite.
+
+| Run | LLM calls | Embeddings | Reused |
+|---|---|---|---|
+| First index | 37,695 | 37,695 | 0 |
+| One function edited (`django/utils/text.py::capfirst`) | **1** | **1** | 37,694 |
+| Nothing changed | **0** | **0** | 37,695 |
+
+**A 99.997% reduction in paid calls for a one-function edit, and 100% for a
+no-op re-index.** The roadmap predicted ~98%; the real figure is higher because
+the prediction assumed file-level granularity and the diff is per entity.
+
+**The honest caveat about wall clock.** Those three runs took 275 s, 415 s and
+256 s. That ordering looks wrong until you notice what was stubbed: with the LLM
+and embedding calls instant, the clock is measuring the *fixed* overhead —
+clone, parse 7,000 files, load 37,695 hashes, stamp them — and none of that got
+cheaper. The saving is in calls, not in these timings. What this does establish
+is the floor: a re-index of a 37k-entity repository cannot go below roughly four
+minutes, essentially all of it clone and parse. Extrapolating the step-1
+measurement of ~0.36 s/entity, the stages that *were* stubbed would have taken
+around 3.8 hours on the first run and about a second on the second.
+
+**Tests: 228 → 267.** The diff is covered as a pure function (renames, file
+moves, edits, shifts, first index) and through the pipeline by counting stub
+calls. The retry case has its own test: kill a run mid-chunk, restart, and
+assert it describes one entity rather than all three.
+
+**One implementation note worth recording.** `mark_seen` and `refresh_locations`
+issue Core UPDATEs against `Entity.__table__`, not the mapped class. An
+ORM-enabled UPDATE carrying bound parameters is interpreted as a
+bulk-update-by-primary-key and demands an `id` in every parameter set — which
+neither statement has, since one matches on an array and the other on a
+bindparam. The failure mode is a confusing `InvalidRequestError` about primary
+keys rather than anything resembling the actual problem.
+
+**Deliberately not done: the GitHub webhook.** It was listed as optional and it
+is the one item here that is not really about indexing — it needs a publicly
+reachable URL, signature verification, and a per-project secret to store, which
+is step 6's territory. `/reindex` already exists and is now cheap enough to call
+freely, which was the point.
+
+**Also considered and rejected: skipping the clone via `git ls-remote`.** If
+HEAD matches `last_indexed_commit`, the whole run could be skipped without
+transferring anything — that would attack the four-minute floor above rather
+than the per-call cost. It adds a network round trip and a second definition of
+"up to date" to keep in step with the entity diff, so it belongs in its own
+change, not bolted onto this one.
+
+**Buys.** The clearest quantifiable win in the project: "cut re-index cost by
+99.997% by content-hashing entities" with a real repository and a reproducible
+measurement behind it.
 
 ---
 
-### Step 5 — Retrieval evaluation, then hybrid search
+### Step 5 — Retrieval evaluation, then hybrid search ✅ done
 
-**Why.** There is currently no answer to "how do you know your search is good?"
-That is the question a technical interviewer will ask about a semantic search
-project, and it deserves a number.
+**Why.** There was no answer to "how do you know your search is good?" That is
+the question a technical interviewer will ask about a semantic search project,
+and it deserves a number.
 
-**Work.**
+**The corpus is CodeLens itself** — every git-tracked `.py` file, 495 entities.
+Chosen over Django (already cloned for step 4) because labels have to be
+auditable, and over `backend/app` alone because 126 entities is too easy. The
+split matters: **351 of the 495 are test entities**, and test names deliberately
+echo the implementations they cover. `test_removes_only_entities_the_run_did_not_see`
+sits next to `delete_missing`. Random chance at success@5 is ~1%.
 
-- A golden set of ~50 `query → expected entity` pairs over a repo you know
-- A script that reports **recall@5** and **MRR**
-- Establish the dense-vector-only baseline
-- Then improve it and measure the delta:
-  - **Hybrid search** — Postgres `tsvector` over descriptions and source for the
-    keyword half, Pinecone for the dense half, fused with reciprocal rank
-    fusion. Both stores are already in place; this needs no new infrastructure.
-  - **Metadata filters** — `entity_type` is already stored in Pinecone metadata
-    and never used. Filtering to functions-only is nearly free.
-  - Optionally a cross-encoder reranker over the top ~50
-  - Optionally include the signature and file path in the embedded text, not
-    just the LLM description
+**62 queries, labelled by Claude Opus 5, from source only.** The generated
+descriptions were deliberately not consulted: writing queries against the text
+being retrieved measures paraphrase overlap, not retrieval. Four categories —
+`natural` (51), `keyword` (4), `jargon` (4, vocabulary absent from the source),
+and `trap` (3, vocabulary that appears verbatim in a *wrong* answer). Labels
+name implementations; tests are non-relevant even when they concern the same
+behaviour, on the grounds that a code search should return the function.
 
-**Verification.** The eval script prints before/after numbers for each change.
+This is not a human-labelled golden set and should not be described as one. It
+is machine-labelled by a stronger model than the one in the pipeline, from
+source rather than from the artifact under test, and validated mechanically.
 
-**Buys.** More than any feature. "Improved recall@5 from 0.62 to 0.84 with
-hybrid retrieval and RRF" beats a longer feature list, and it demonstrates the
-habit of measuring.
+**`eval/validate_golden_set.py` earns its place.** It caught three defects in
+the first draft that would each have silently corrupted the numbers: a query
+tagged `jargon` whose every term was in fact in the source (that became the
+`trap` category), an entity anchoring three separate queries and so counting
+triple, and label paths that had to survive both Windows and Linux rooting.
+
+**On the metric name.** The plan said recall@5. With labels that mean "any of
+these is correct" rather than "return all of these", textbook recall punishes a
+query for having two acceptable answers and finding one. The headline is
+therefore **success@5** — did an acceptable answer appear in the top five — with
+strict recall@5 printed beside it so the choice is visible rather than hidden.
+
+**Results.** 495 entities, 62 queries, retrieval depth 30, RRF k=60.
+
+| | dense | keyword | hybrid |
+|---|---|---|---|
+| success@1 | 0.500 | 0.161 | **0.532** |
+| success@5 | 0.758 | 0.194 | **0.790** |
+| success@10 | 0.806 | 0.194 | **0.839** |
+| strict recall@5 | 0.742 | 0.177 | **0.774** |
+| MRR | 0.592 | 0.173 | **0.621** |
+
+**Hybrid is a real but modest win, and the aggregate alone does not show that.**
++3.2 points on 62 queries is two queries — well inside noise, and an average can
+hide six gains against four losses. The per-query breakdown is what settles it:
+**2 gained, 0 lost.** A strict improvement. And the two it gained (q36, q38) are
+exactly the two the keyword half got right on its own, so the gain is traceable
+to the keyword retriever contributing rather than to RRF reshuffling the dense
+ranking. That is why `keyword` is evaluated at all — it is a control, not a
+candidate.
+
+**The keyword half is terrible alone (0.194) and still worth fusing.** It loses
+37 queries the dense half gets, because natural-language queries share little
+vocabulary with code. But it is unshakeable on exact identifiers, which is
+precisely where embeddings are vague.
+
+**What shipped.**
+
+- `eval/` — golden set, validator, corpus indexer, and a harness with pluggable
+  strategies and a head-to-head diff
+- `entities.search_vector`, a `GENERATED ... STORED` tsvector with weights
+  qualname `A` > description `B` > file_path `C` > source `D`, plus a GIN index.
+  Generated rather than application-maintained so it cannot drift; adding the
+  column backfills every existing row, so old projects became keyword-searchable
+  without a re-index.
+- `entity_service.keyword_search` using `websearch_to_tsquery` (accepts whatever
+  a user types; `to_tsquery` raises on a bare sentence) and `ts_rank_cd`
+- `search_service.reciprocal_rank_fusion`, and `search_project` switched over
+- Scores are normalised against the top hit. Raw RRF sits near 1/60, and the UI
+  renders `score` as a percentage bar — a perfect match displaying as "3%" would
+  read as a broken search.
+
+**Tests: 267 → 308.** Fusion arithmetic, keyword scoping, the normalisation, and
+the metrics themselves — if MRR is computed wrongly every number above is wrong,
+so `QueryOutcome` is tested directly against handwritten rankings.
+
+**Cost.** $0.04 to index the corpus once, measured from the real prompts, and
+$0.000015 per eval run. Step 4 is why re-indexing the corpus is free.
+
+**The finding worth more than the hybrid delta: tests outrank implementations.**
+13 of the 15 dense misses have a test entity at rank 1. The LLM's description of
+a test often states the behaviour *more* explicitly than the implementation's
+does, so it embeds closer to a natural-language query. This is the largest
+single lever left, and it is not a retrieval problem — it is a ranking prior.
+
+**But measuring that lever honestly is harder than it looks.** My relevance
+policy declares tests non-relevant, so "deprioritise test files" would be
+optimising directly against my own labelling choice and would show a large,
+partly circular gain. It is defensible as a *product* decision — users searching
+a codebase want the function, not its test — but the eval was built in a way
+that rewards it, and any number from it has to carry that caveat.
+
+**Not done, and why.** The cross-encoder reranker (a new dependency or a new
+paid call, for a corpus where the top-10 already contains the answer 84% of the
+time — the ceiling it could reach is +5 points) and embedding the signature and
+file path alongside the description (cheap, ~$0.001 to re-embed, and the more
+promising of the two — it attacks the same lexical gap the keyword half does,
+from the dense side).
 
 ---
 
@@ -369,11 +528,13 @@ Independent of the sequence above, in rough order of how bad they are:
 5. Clone URL unvalidated server-side *(step 6)*
 6. CORS wildcard with credentials *(step 6)*
 7. No rate limits or quotas *(step 6)*
-8. Re-index re-describes everything *(step 4)*
-9. No way to know if retrieval is any good *(step 5)*
+8. ~~Re-index re-describes everything~~ ✅ *(step 4)*
+9. ~~No way to know if retrieval is any good~~ ✅ *(step 5)* — 62-query golden
+   set, success@5 and MRR, dense baseline 0.758 / 0.592
 10. `print()` logging *(step 6)*
 11. Unpinned dependencies *(step 6)*
-12. `delete_missing` bounded by statement parameter limit *(step 4)*
+12. ~~`delete_missing` bounded by statement parameter limit~~ ✅ *(step 4)* —
+    replaced by the `last_seen_run` marker; verified past 70,000 ids
 
 ---
 

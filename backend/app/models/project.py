@@ -68,5 +68,10 @@ class Project(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # HEAD of the last run that completed. Written only on success, so it is a
+    # statement about what is actually in the two stores, not about what was
+    # attempted. 40 chars for a hex sha1; unset until the first run finishes.
+    last_indexed_commit: Mapped[str | None] = mapped_column(String(40), nullable=True)
+
     def __repr__(self) -> str:
         return f"<Project {self.github_owner}/{self.github_repo_name} {self.status}>"

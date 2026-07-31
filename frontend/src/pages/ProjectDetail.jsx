@@ -187,6 +187,19 @@ export default function ProjectDetail() {
         <div className="detail-timestamps">
           <span>Created: {new Date(project.created_at).toLocaleString()}</span>
           <span>Updated: {new Date(project.updated_at).toLocaleString()}</span>
+          {project.last_indexed_commit && (
+            <span>
+              Indexed commit:{' '}
+              <a
+                href={`${project.github_repo_url.replace(/\.git$/, '')}/commit/${project.last_indexed_commit}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="detail-commit"
+              >
+                {project.last_indexed_commit.slice(0, 7)}
+              </a>
+            </span>
+          )}
         </div>
       </div>
 

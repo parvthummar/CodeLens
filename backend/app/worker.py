@@ -80,8 +80,11 @@ async def index_project(ctx: dict, job_id: str) -> str:
             return "project-gone"
 
         print(
-            f"[WORKER] job={job_id} done: {result.entities_indexed} indexed, "
-            f"{result.entities_removed} removed, {result.chunks} chunks"
+            f"[WORKER] job={job_id} done: {result.entities_indexed} indexed "
+            f"({result.entities_described} described, {result.entities_reused} "
+            f"reused, {result.reuse_ratio:.0%} skipped), "
+            f"{result.entities_removed} removed, {result.chunks} chunks, "
+            f"commit={(result.commit_sha or 'unknown')[:8]}"
         )
         return "ok"
 
