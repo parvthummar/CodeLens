@@ -17,6 +17,12 @@ a repo, the indexing pipeline (`pending → cloning → indexing → ready`), se
 search, and delete. A 56-entity repo indexes in ~29 s and search returns the
 correct top hit for plain-English queries.
 
+**Updated after steps 4–5** (merge `5d47e14`): indexing runs in a separate
+worker, re-indexing describes only changed entities, and search is hybrid —
+Pinecone for semantic similarity fused with Postgres full text. Search quality
+is no longer a claim: 0.790 success@5 and 0.621 MRR on a 62-query set, with the
+baseline and method in `backend/eval/RESULTS.md`.
+
 **What the migration already fixed:**
 
 - Postgres owns users, projects, and parsed entities; Pinecone holds only
@@ -570,13 +576,21 @@ have been less machinery for the same guarantees, at the cost of polling.
   irreversible, so it needs an explicit decision.
 - **Rotate the Neon password.** It was pasted into a chat transcript during the
   migration.
-- **Update the git remote.** It still points at `code_retriever`; the repo was
-  renamed to `CodeLens`. Pushes currently work through GitHub's redirect.
-  `git remote set-url origin https://github.com/parvthummar/CodeLens.git`
+- ~~**Update the git remote.**~~ ✅ Done 2026-07-31; `origin` now points at
+  `CodeLens.git` directly instead of relying on GitHub's redirect.
 - **`CLAUDE.md` is gitignored**, so its Postgres updates exist only locally. If
   it should be shared, drop that line from `.gitignore`.
-- **`feat/postgres-migration`** still exists locally and on origin; safe to
-  delete now that it's merged.
+- **Two merged branches still exist**, `feat/postgres-migration` and
+  `feat/docker-compose-ci`, locally and on origin. Both are fully contained in
+  `main` — deliberately kept for now, not forgotten.
+- **`feat/docker-compose-ci` carries four steps, not one.** Steps 2–5 all landed
+  on it (PR #1, merge `5d47e14`), so the branch name describes only the first.
+  Worth a branch per step next time; the commits are separable even though the
+  branch was not.
+- **Eval corpus projects accumulate.** Each `eval.index_corpus` run creates a
+  project and a Pinecone namespace under `retrieval-eval@codelens.local`. Drop
+  old ones with `python -m eval.index_corpus --drop <id>` rather than leaving
+  them to become the next generation of orphaned namespaces.
 
 ---
 
