@@ -61,3 +61,12 @@ app.include_router(v1_router)
 async def health_check():
     """Basic liveness probe."""
     return {"status": "ok"}
+
+
+@app.get("/health/ready", tags=["Health"])
+async def readiness_check():
+    """Round-trip to Postgres. The frontend calls this on page load so a
+    suspended Neon compute wakes before the user submits a form, not after."""
+    async with get_engine().connect() as conn:
+        await conn.execute(text("SELECT 1"))
+    return {"status": "ok"}

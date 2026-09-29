@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import ServerWakeBanner from '../components/ServerWakeBanner';
+import useServerStatus from '../hooks/useServerStatus';
 import './Login.css';
 
 export default function Login() {
@@ -8,6 +10,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const serverStatus = useServerStatus();
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
@@ -34,6 +37,8 @@ export default function Login() {
         <h1 className="login-title">Welcome Back</h1>
         <p className="login-subtitle">Sign in to search your codebases with AI</p>
 
+        <ServerWakeBanner />
+
         {error && <div className="login-error">{error}</div>}
 
         <form className="login-form" onSubmit={handleSubmit}>
@@ -54,7 +59,7 @@ export default function Login() {
             required
           />
           <button className="btn-primary login-submit" type="submit" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? (serverStatus === 'ready' ? 'Signing in...' : 'Waking up server...') : 'Sign In'}
           </button>
         </form>
 
