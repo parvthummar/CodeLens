@@ -15,8 +15,9 @@ services:
     # Same region as the Neon database (aws ap-southeast-1).
     region: singapore
     rootDir: backend
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    # Both paths are relative to rootDir, not the repo root.
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     dockerCommand: /app/start-combined.sh
     healthCheckPath: /health
     autoDeploy: true
