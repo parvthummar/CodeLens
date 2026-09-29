@@ -21,6 +21,10 @@ services:
     dockerCommand: /app/start-combined.sh
     healthCheckPath: /health
     autoDeploy: true
+    # Frontend-only pushes (Vercel) must not restart the API.
+    buildFilter:
+      paths:
+        - backend/**
     envVars:
       - key: DATABASE_URL
         sync: false

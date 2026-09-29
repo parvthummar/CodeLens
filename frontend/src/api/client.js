@@ -1,5 +1,5 @@
-// Set VITE_API_URL at build time (Vercel env var); falls back to the local API.
-export const API_BASE = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
+import { API_BASE } from './config';
+import { markServerReachable } from './serverStatus';
 
 async function request(endpoint, options = {}) {
   const token = localStorage.getItem('token');
@@ -13,6 +13,9 @@ async function request(endpoint, options = {}) {
     ...options,
     headers,
   });
+  // An answer from the app proves the server is up, whatever the ping says.
+  // 5xx is excluded: Render's proxy answers 502/503 while the app is down.
+  if (response.status < 500) markServerReachable();
 
   // Only redirect on 401 for authenticated routes, not for the auth endpoints themselves
   // (wrong password on /auth/login also returns 401, but should show an error, not redirect)

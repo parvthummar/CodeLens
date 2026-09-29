@@ -1,17 +1,22 @@
-import { API_BASE } from './client';
+import { API_BASE } from './config';
 
 // The free-tier backend sleeps when idle, and waking it (Render, then Neon) can
-// take up to a minute. We ping it once on page load so it is usually awake by
-// the time someone submits a form, and let pages show a banner meanwhile.
+// take up to a minute. We ping it on page load so it is usually awake by the
+// time someone submits a form, and let pages show a banner meanwhile.
 //
 // status: 'checking' → first ping in flight, not yet slow enough to mention
 //         'waking'   → slow or failing; the server is starting up
-//         'ready'    → answered
-//         'down'     → still failing after MAX_WAIT_MS
+//         'ready'    → answered (a ping, or any other API call)
+//         'down'     → still failing after GIVE_UP_NOTICE_MS; pings continue
 
-const SLOW_AFTER_MS = 1500;
+// A fresh TLS connection plus a Neon compute resuming can take a couple of
+// seconds even with Render awake; only a real cold start should show a banner.
+const SLOW_AFTER_MS = 4000;
+// Render holds a request open while the instance boots, and that request can
+// hang long past the moment the app is up. Abandon it and ask again.
+const PING_TIMEOUT_MS = 8000;
 const RETRY_EVERY_MS = 3000;
-const MAX_WAIT_MS = 120000;
+const GIVE_UP_NOTICE_MS = 120000;
 
 let status = 'checking';
 let started = false;
@@ -24,35 +29,45 @@ function setStatus(next) {
 }
 
 async function ping() {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
   try {
-    const res = await fetch(`${API_BASE}/health/ready`, { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/health/ready`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    });
     return res.ok;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timer);
   }
+}
+
+export function markServerReachable() {
+  setStatus('ready');
 }
 
 export function wakeServer() {
   if (started) return;
   started = true;
 
-  const deadline = Date.now() + MAX_WAIT_MS;
-  const slowTimer = setTimeout(() => {
+  const startedAt = Date.now();
+  setTimeout(() => {
     if (status === 'checking') setStatus('waking');
   }, SLOW_AFTER_MS);
 
   (async () => {
-    while (Date.now() < deadline) {
+    // Keep going until something succeeds; 'down' is a notice, not a stop.
+    while (status !== 'ready') {
       if (await ping()) {
-        clearTimeout(slowTimer);
         setStatus('ready');
         return;
       }
-      setStatus('waking');
+      if (status === 'ready') return;
+      setStatus(Date.now() - startedAt > GIVE_UP_NOTICE_MS ? 'down' : 'waking');
       await new Promise((r) => setTimeout(r, RETRY_EVERY_MS));
     }
-    clearTimeout(slowTimer);
-    setStatus('down');
   })();
 }
 

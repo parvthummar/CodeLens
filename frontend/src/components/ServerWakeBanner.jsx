@@ -10,7 +10,7 @@ export default function ServerWakeBanner() {
   const [showReady, setShowReady] = useState(false);
 
   useEffect(() => {
-    if (status === 'waking') setWasWaking(true);
+    if (status === 'waking' || status === 'down') setWasWaking(true);
     if (status === 'ready' && wasWaking) {
       setShowReady(true);
       const t = setTimeout(() => setShowReady(false), 2500);
@@ -34,10 +34,10 @@ export default function ServerWakeBanner() {
   }
   if (status === 'down') {
     return (
-      <div className="wake-banner wake-banner--error" role="alert">
+      <div className="wake-banner wake-banner--error" role="status">
         <div>
-          <div className="wake-title">Server is not responding</div>
-          <div className="wake-text">Please refresh the page in a minute.</div>
+          <div className="wake-title">This is taking longer than usual…</div>
+          <div className="wake-text">Still trying. You can sign in anyway, or refresh in a minute.</div>
         </div>
       </div>
     );
