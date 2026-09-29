@@ -32,7 +32,8 @@ async function ping() {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
   try {
-    const res = await fetch(`${API_BASE}/health/ready`, {
+    // Not /health/...: ad blockers match that path and block it client-side.
+    const res = await fetch(`${API_BASE}/api/v1/ready`, {
       cache: 'no-store',
       signal: controller.signal,
     });

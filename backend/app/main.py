@@ -63,7 +63,9 @@ async def health_check():
     return {"status": "ok"}
 
 
-@app.get("/health/ready", tags=["Health"])
+# Deliberately not under /health: ad blockers' filter lists match "/health"
+# as telemetry and fail the request in the browser (ERR_BLOCKED_BY_CLIENT).
+@app.get("/api/v1/ready", tags=["Health"])
 async def readiness_check():
     """Round-trip to Postgres. The frontend calls this on page load so a
     suspended Neon compute wakes before the user submits a form, not after."""
