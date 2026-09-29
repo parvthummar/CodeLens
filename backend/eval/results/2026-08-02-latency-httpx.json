@@ -1,0 +1,645 @@
+{
+  "recorded_at": "2026-08-02T10:24:51+00:00",
+  "target": {
+    "base_url": "http://127.0.0.1:8000",
+    "project_id": "884d41fd-80c8-4a9a-83e5-6913304632f8",
+    "top_k": 10,
+    "warmup": 5,
+    "concurrency": 1
+  },
+  "config": {
+    "embedding_model": "text-embedding-3-small",
+    "embedding_dimensions": 1024,
+    "candidate_depth": 30,
+    "distinct_queries": 110,
+    "seed": 1729
+  },
+  "summary": {
+    "requests": 100,
+    "succeeded": 100,
+    "failed": 0,
+    "min_ms": 3349.5600999995077,
+    "p50_ms": 3840.7767999997304,
+    "p90_ms": 4767.730499999743,
+    "p95_ms": 8109.981199999311,
+    "p99_ms": 10436.529200000223,
+    "max_ms": 10543.26890000084,
+    "mean_ms": 4237.313526000216,
+    "stdev_ms": 1398.8957647209922,
+    "mean_results": 10.0
+  },
+  "samples": [
+    {
+      "query": "work out whether the database host is behind a connection pooler",
+      "ms": 3891.32,
+      "status": 200
+    },
+    {
+      "query": "produce a stable hash of a block of text",
+      "ms": 3581.05,
+      "status": 200
+    },
+    {
+      "query": "delete records that no longer exist upstream",
+      "ms": 3596.39,
+      "status": 200
+    },
+    {
+      "query": "turn a ranked list of ids into full records",
+      "ms": 3392.94,
+      "status": 200
+    },
+    {
+      "query": "prepared statement name collision",
+      "ms": 3736.83,
+      "status": 200
+    },
+    {
+      "query": "run several async tasks with a concurrency limit",
+      "ms": 10436.53,
+      "status": 200
+    },
+    {
+      "query": "issue a signed token when someone logs in",
+      "ms": 4863.84,
+      "status": 200
+    },
+    {
+      "query": "split a large list into fixed-size chunks",
+      "ms": 3800.24,
+      "status": 200
+    },
+    {
+      "query": "retry a failed operation with exponential backoff",
+      "ms": 3422.17,
+      "status": 200
+    },
+    {
+      "query": "decode jwt",
+      "ms": 3653.42,
+      "status": 200
+    },
+    {
+      "query": "record a failure and decide whether there is another attempt left",
+      "ms": 3662.64,
+      "status": 200
+    },
+    {
+      "query": "raise a helpful error when a required field is missing",
+      "ms": 3781.38,
+      "status": 200
+    },
+    {
+      "query": "check whether a plaintext password matches the stored hash",
+      "ms": 3935.62,
+      "status": 200
+    },
+    {
+      "query": "build the text that gets sent to the language model",
+      "ms": 3822.88,
+      "status": 200
+    },
+    {
+      "query": "log a one-line summary when a job finishes",
+      "ms": 3773.08,
+      "status": 200
+    },
+    {
+      "query": "checkpoint how far through a long job we have got",
+      "ms": 3651.2,
+      "status": 200
+    },
+    {
+      "query": "loop that periodically reports the worker is alive",
+      "ms": 3702.78,
+      "status": 200
+    },
+    {
+      "query": "detect whether a host is behind a connection pooler",
+      "ms": 9054.32,
+      "status": 200
+    },
+    {
+      "query": "hydrate entity records by id without leaking across projects",
+      "ms": 3751.45,
+      "status": 200
+    },
+    {
+      "query": "walk a directory and pull out every function and class in the python files",
+      "ms": 3437.36,
+      "status": 200
+    },
+    {
+      "query": "authenticate an email and password and hand back a token",
+      "ms": 3552.27,
+      "status": 200
+    },
+    {
+      "query": "split a list into fixed-size batches",
+      "ms": 3913.05,
+      "status": 200
+    },
+    {
+      "query": "correct the line numbers of code that moved but did not change",
+      "ms": 3883.31,
+      "status": 200
+    },
+    {
+      "query": "which commit is checked out",
+      "ms": 3996.27,
+      "status": 200
+    },
+    {
+      "query": "parse codebase skipping pycache and node_modules",
+      "ms": 4049.14,
+      "status": 200
+    },
+    {
+      "query": "close every database connection when the app shuts down",
+      "ms": 4668.79,
+      "status": 200
+    },
+    {
+      "query": "make a shallow clone of a git repository",
+      "ms": 3430.63,
+      "status": 200
+    },
+    {
+      "query": "work out which entities changed since the last index",
+      "ms": 3496.29,
+      "status": 200
+    },
+    {
+      "query": "pick the top results after merging two ranked lists",
+      "ms": 3941.22,
+      "status": 200
+    },
+    {
+      "query": "at-most-once execution guarantee under concurrency",
+      "ms": 3538.16,
+      "status": 200
+    },
+    {
+      "query": "remember which commit the index reflects",
+      "ms": 3823.22,
+      "status": 200
+    },
+    {
+      "query": "graceful shutdown, release the redis pool and the db engine",
+      "ms": 3474.29,
+      "status": 200
+    },
+    {
+      "query": "extract the function signature from source code",
+      "ms": 3597.83,
+      "status": 200
+    },
+    {
+      "query": "decide which items still need processing",
+      "ms": 4856.95,
+      "status": 200
+    },
+    {
+      "query": "the worker entry point that executes one indexing job",
+      "ms": 9300.3,
+      "status": 200
+    },
+    {
+      "query": "reject a request that is missing a bearer token",
+      "ms": 3575.5,
+      "status": 200
+    },
+    {
+      "query": "move a project between pipeline states like cloning and ready",
+      "ms": 3471.22,
+      "status": 200
+    },
+    {
+      "query": "strip query parameters a driver does not understand",
+      "ms": 3622.14,
+      "status": 200
+    },
+    {
+      "query": "read the current user from the request's authorization header",
+      "ms": 3850.67,
+      "status": 200
+    },
+    {
+      "query": "fan out work with bounded concurrency using a semaphore",
+      "ms": 3382.96,
+      "status": 200
+    },
+    {
+      "query": "collapse duplicate definitions that share a name",
+      "ms": 3813.61,
+      "status": 200
+    },
+    {
+      "query": "read configuration from environment variables",
+      "ms": 3809.2,
+      "status": 200
+    },
+    {
+      "query": "throw away the temporary checkout when we are finished",
+      "ms": 3671.88,
+      "status": 200
+    },
+    {
+      "query": "search a codebase in plain english and rank the results",
+      "ms": 3769.74,
+      "status": 200
+    },
+    {
+      "query": "atomically take ownership of a queued job",
+      "ms": 3385.13,
+      "status": 200
+    },
+    {
+      "query": "serialize an object to JSON",
+      "ms": 3793.02,
+      "status": 200
+    },
+    {
+      "query": "translate a domain error into an HTTP status code",
+      "ms": 3403.45,
+      "status": 200
+    },
+    {
+      "query": "shallow clone a git repository into a temporary directory",
+      "ms": 3799.91,
+      "status": 200
+    },
+    {
+      "query": "build the async database engine from a connection url",
+      "ms": 3946.87,
+      "status": 200
+    },
+    {
+      "query": "skip files that cannot be parsed",
+      "ms": 3400.28,
+      "status": 200
+    },
+    {
+      "query": "write a temporary file and clean it up",
+      "ms": 3706.46,
+      "status": 200
+    },
+    {
+      "query": "normalise a connection string before use",
+      "ms": 3470.26,
+      "status": 200
+    },
+    {
+      "query": "queue work to be done later instead of inline",
+      "ms": 9247.48,
+      "status": 200
+    },
+    {
+      "query": "how long to wait before retrying a failed job",
+      "ms": 4022.08,
+      "status": 200
+    },
+    {
+      "query": "build a signature for a class including its base classes",
+      "ms": 3925.12,
+      "status": 200
+    },
+    {
+      "query": "find the entry point of the application",
+      "ms": 3859.3,
+      "status": 200
+    },
+    {
+      "query": "strip connection string parameters the driver will reject",
+      "ms": 3554.84,
+      "status": 200
+    },
+    {
+      "query": "dependency that gives each request its own database session",
+      "ms": 3550.9,
+      "status": 200
+    },
+    {
+      "query": "paginate a list of results",
+      "ms": 3834.92,
+      "status": 200
+    },
+    {
+      "query": "check whether a background worker is still alive",
+      "ms": 3425.49,
+      "status": 200
+    },
+    {
+      "query": "stamp rows as having been seen by the current run",
+      "ms": 3993.17,
+      "status": 200
+    },
+    {
+      "query": "build a readable signature string for a function",
+      "ms": 8109.98,
+      "status": 200
+    },
+    {
+      "query": "count rows belonging to a single tenant",
+      "ms": 3688.09,
+      "status": 200
+    },
+    {
+      "query": "run the whole indexing pipeline for one repository",
+      "ms": 3405.75,
+      "status": 200
+    },
+    {
+      "query": "periodic sweep that rescues stranded work",
+      "ms": 3647.14,
+      "status": 200
+    },
+    {
+      "query": "liveness probe endpoint",
+      "ms": 3349.56,
+      "status": 200
+    },
+    {
+      "query": "guard an endpoint so only the owner can call it",
+      "ms": 3624.83,
+      "status": 200
+    },
+    {
+      "query": "reconcile stale running jobs",
+      "ms": 3459.32,
+      "status": 200
+    },
+    {
+      "query": "return a 404 when the requested object does not exist",
+      "ms": 3868.09,
+      "status": 200
+    },
+    {
+      "query": "store a vector alongside its identifier",
+      "ms": 3924.75,
+      "status": 200
+    },
+    {
+      "query": "clean up resources even if an exception is raised",
+      "ms": 3878.62,
+      "status": 200
+    },
+    {
+      "query": "ask a language model to describe what a piece of code does",
+      "ms": 3840.78,
+      "status": 200
+    },
+    {
+      "query": "stop the same project being queued for indexing twice",
+      "ms": 3989.64,
+      "status": 200
+    },
+    {
+      "query": "compare two dictionaries and report the differences",
+      "ms": 4250.03,
+      "status": 200
+    },
+    {
+      "query": "throw away every vector belonging to a project",
+      "ms": 3932.56,
+      "status": 200
+    },
+    {
+      "query": "cache the result of an expensive computation",
+      "ms": 10543.27,
+      "status": 200
+    },
+    {
+      "query": "open a short-lived database session for a background job",
+      "ms": 4239.95,
+      "status": 200
+    },
+    {
+      "query": "look up an account by email address",
+      "ms": 4219.86,
+      "status": 200
+    },
+    {
+      "query": "recursively walk a directory tree",
+      "ms": 4115.14,
+      "status": 200
+    },
+    {
+      "query": "load settings from a dotenv file",
+      "ms": 3648.32,
+      "status": 200
+    },
+    {
+      "query": "create a project and queue its first index",
+      "ms": 4061.62,
+      "status": 200
+    },
+    {
+      "query": "idempotent bulk write with conflict resolution",
+      "ms": 3585.74,
+      "status": 200
+    },
+    {
+      "query": "apply a database schema migration",
+      "ms": 4387.12,
+      "status": 200
+    },
+    {
+      "query": "roll back a transaction when something fails",
+      "ms": 4211.81,
+      "status": 200
+    },
+    {
+      "query": "measure how long a function takes to run",
+      "ms": 4767.73,
+      "status": 200
+    },
+    {
+      "query": "report progress while a long job is running",
+      "ms": 3870.39,
+      "status": 200
+    },
+    {
+      "query": "cap how many model requests are in flight at once",
+      "ms": 4410.79,
+      "status": 200
+    },
+    {
+      "query": "pull the owner and repo name out of a github url",
+      "ms": 4447.9,
+      "status": 200
+    },
+    {
+      "query": "approximate nearest neighbour lookup",
+      "ms": 4413.47,
+      "status": 200
+    },
+    {
+      "query": "shorten a string for display without breaking words",
+      "ms": 4137.71,
+      "status": 200
+    },
+    {
+      "query": "generate a unique identifier for a record",
+      "ms": 4202.67,
+      "status": 200
+    },
+    {
+      "query": "hash a user's password before saving it to the database",
+      "ms": 4487.18,
+      "status": 200
+    },
+    {
+      "query": "validate a URL before using it",
+      "ms": 4382.37,
+      "status": 200
+    },
+    {
+      "query": "send an HTTP request with a timeout",
+      "ms": 4534.61,
+      "status": 200
+    },
+    {
+      "query": "define the shape of an API response",
+      "ms": 5210.2,
+      "status": 200
+    },
+    {
+      "query": "fingerprint a chunk of source so we can tell if it changed",
+      "ms": 4469.32,
+      "status": 200
+    },
+    {
+      "query": "read back the stored hashes and identities for a project",
+      "ms": 4338.25,
+      "status": 200
+    },
+    {
+      "query": "recover work abandoned by a worker that died",
+      "ms": 4403.87,
+      "status": 200
+    },
+    {
+      "query": "turn a list of texts into vectors, batched",
+      "ms": 5184.09,
+      "status": 200
+    },
+    {
+      "query": "open a database connection and close it afterwards",
+      "ms": 4734.08,
+      "status": 200
+    }
+  ],
+  "stages_ms": {
+    "embed": [
+      1921.0082999998122,
+      429.6641000000818,
+      490.2270000020508,
+      490.15220000001136,
+      514.261099997384,
+      665.3629000029468,
+      460.5828999992809,
+      588.7148999972851,
+      436.68239999897196,
+      510.85340000281576,
+      444.63420000101905,
+      1076.3334999974177,
+      479.160499999125,
+      423.1212999984564,
+      618.4195999994699,
+      402.1491999992577,
+      585.7367999997223,
+      413.42380000060075,
+      451.97470000130124,
+      410.22630000225035
+    ],
+    "pinecone": [
+      1736.2881999979436,
+      314.4563999994716,
+      409.5625999980257,
+      313.0858000004082,
+      410.27480000047944,
+      339.11279999665567,
+      327.1303000001353,
+      439.5202000014251,
+      300.8637000020826,
+      301.2194999973872,
+      381.73339999775635,
+      420.8704000011494,
+      301.0556999979599,
+      404.56450000056066,
+      307.8877999978431,
+      293.09790000115754,
+      312.0349000018905,
+      404.49079999962123,
+      374.5128999980807,
+      472.7277999991202
+    ],
+    "db_connect": [
+      1960.3659999993397,
+      1970.273900002212,
+      2183.2463999999163,
+      2048.5678000004555,
+      2172.2337000028347,
+      2329.6395000033954,
+      1977.1213999993051,
+      2147.11719999832,
+      1823.7459000010858,
+      2000.046699999075,
+      2038.1003000002238,
+      1748.5366000000795,
+      2059.0746000016225,
+      2213.5869999983697,
+      2319.499799999903,
+      1829.3120999987877,
+      2651.158899996517,
+      2265.4664000001503,
+      2221.730100001878,
+      2410.7543999998597
+    ],
+    "keyword": [
+      390.7109000028868,
+      399.17249999780324,
+      472.7459000023373,
+      344.02480000062496,
+      372.9868999980681,
+      613.6970999978075,
+      413.53280000112136,
+      510.5416000005789,
+      411.7465999988781,
+      421.25660000237986,
+      315.2625000002445,
+      503.8978999982646,
+      328.0229000010877,
+      459.0972000005422,
+      441.6957000030379,
+      306.5177999997104,
+      603.0900000005204,
+      500.31250000029104,
+      375.6231999977899,
+      365.67490000015823
+    ],
+    "fuse_hydrate": [
+      457.2141999997257,
+      436.5421000002243,
+      489.0936000010697,
+      451.9015000005311,
+      628.2796000014059,
+      570.5329000011261,
+      451.597799998126,
+      407.7529999995022,
+      665.91519999929,
+      667.1146999979101,
+      467.74070000174106,
+      592.468300001201,
+      445.3388999972958,
+      617.4890000002051,
+      562.0958999970753,
+      486.00270000315504,
+      651.8953000013425,
+      632.8796999987389,
+      591.2429000018165,
+      596.9070999999531
+    ]
+  }
+}

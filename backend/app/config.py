@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     pinecone_index_host: str = ""
     pinecone_index_name: str = "code-search"
 
+    # Comma-separated browser origins allowed by CORS, e.g. the Vercel URL.
+    # "*" (the default) is fine locally; set it explicitly when deployed.
+    cors_origins: str = "*"
+
     # Queue (Redis / ARQ). Redis delivers jobs; Postgres owns their state.
     redis_url: str = "redis://localhost:6379"
 

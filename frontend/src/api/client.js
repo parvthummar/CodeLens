@@ -1,4 +1,5 @@
-const API_BASE = 'http://127.0.0.1:8000';
+// Set VITE_API_URL at build time (Vercel env var); falls back to the local API.
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
 
 async function request(endpoint, options = {}) {
   const token = localStorage.getItem('token');

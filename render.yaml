@@ -1,0 +1,61 @@
+# Render Blueprint: demo deployment on the free tier.
+#
+# One web service runs both the API and the indexing worker (start-combined.sh),
+# because a separate background worker is a paid service on Render. Postgres is
+# Neon and vectors are Pinecone, so neither is defined here.
+#
+# Free web services sleep after 15 minutes idle. An indexing run cut off by that
+# is retried by the worker's reconciler once the service wakes.
+
+services:
+  - type: web
+    name: codelens-api
+    runtime: docker
+    plan: free
+    # Same region as the Neon database (aws ap-southeast-1).
+    region: singapore
+    rootDir: backend
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: /app/start-combined.sh
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_DIRECT
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_LLM_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: OPENAI_EMBEDDING_DIMENSIONS
+        value: "1024"
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: PINECONE_INDEX_HOST
+        sync: false
+      - key: PINECONE_INDEX_NAME
+        value: code-search
+      # The Vercel URL, e.g. https://codelens.vercel.app
+      - key: CORS_ORIGINS
+        sync: false
+      # 512 MB of RAM is shared with the API; one clone at a time.
+      - key: WORKER_CONCURRENCY
+        value: "1"
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: codelens-redis
+          property: connectionString
+
+  - type: keyvalue
+    name: codelens-redis
+    plan: free
+    region: singapore
+    # Empty list: reachable only from services in this Render account.
+    ipAllowList: []

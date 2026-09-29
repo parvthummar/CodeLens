@@ -60,3 +60,6 @@ frontend/*.local
 Thumbs.db
 
 CLAUDE.md
+# Personal notes, not for the repo
+INTERVIEW_QA.md
+PROJECT_EXPLAINED.md

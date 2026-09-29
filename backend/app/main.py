@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.api.v1.router import v1_router
+from app.config import settings
 from app.db.postgres import dispose_engine, get_engine
 from app.services import queue_service
 
@@ -43,10 +44,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow everything during development
+# CORS — everything by default; CORS_ORIGINS narrows it in deployment
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip().rstrip("/") for o in settings.cors_origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

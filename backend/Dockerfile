@@ -25,10 +25,11 @@ COPY . .
 # process cannot rewrite its own code. Clones go to tempfile.mkdtemp() under
 # /tmp, which is world-writable, so nothing else needs chown.
 RUN useradd --create-home --uid 10001 appuser \
-    && chmod +x /app/docker-entrypoint.sh
+    && chmod +x /app/docker-entrypoint.sh /app/start-combined.sh
 USER appuser
 
 EXPOSE 8000
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Hosts like Render assign the port through $PORT; 8000 locally.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
